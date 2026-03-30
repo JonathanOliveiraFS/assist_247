@@ -1,0 +1,93 @@
+services:
+  # -------------------------------------------------------------
+  # 1. INFRAESTRUTURA BASE (Banco de Dados e Cache)
+  # -------------------------------------------------------------
+  postgres:
+    container_name: postgres_integra
+    image: postgres:15
+    command: ["postgres", "-c", "max_connections=1000"]
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - 5432
+
+  redis:
+    container_name: redis_integra
+    image: redis:latest
+    command: >
+      redis-server --port 6379 --appendonly yes
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # -------------------------------------------------------------
+  # 2. MOTOR DE TEMPO REAL (Comunicação WhatsApp)
+  # -------------------------------------------------------------
+  evolution-api:
+    container_name: evolution_api_integra
+    # Nota: Usando a imagem da evoapicloud como no seu primeiro arquivo. 
+    # Se preferir a versão v2.1.1 da atendai, basta alterar aqui.
+    image: evoapicloud/evolution-api:latest 
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis
+
+  # -------------------------------------------------------------
+  # 3. MOTOR PRINCIPAL (Bot FastAPI + LangChain)
+  # -------------------------------------------------------------
+  bot:
+    container_name: integra_ai_bot
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - evolution-api
+      - redis
+    volumes:
+      # Unificamos o RAG conforme a Estrutura de Arquivos do GEMINI.MD
+      - ./rag_data:/app/rag_data
+      # (Opcional) Mapear o código para live-reload durante o desenvolvimento
+      - ./app:/app/app 
+
+  # -------------------------------------------------------------
+  # 4. SERVIDORES MCP (Isolamento de Ferramentas)
+  # -------------------------------------------------------------
+  mcp-agenda:
+    container_name: mcp_agenda_clinica
+    build: ./mcp_servers/mcp_agenda_clinica
+    restart: always
+    ports:
+      - "8001:8000" # Exposto na porta 8001 para o bot consumir
+    env_file:
+      - .env
+
+  mcp-crm:
+    container_name: mcp_crm_integra
+    build: ./mcp_servers/mcp_crm_integra
+    restart: always
+    ports:
+      - "8002:8000" # Exposto na porta 8002
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+  redis_data:
+  evolution_instances:

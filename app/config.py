@@ -1,0 +1,22 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+
+class Settings(BaseSettings):
+    # O Pydantic vai procurar essas variáveis no nosso .env
+    openai_api_key: str = Field(..., env='OPENAI_API_KEY')
+    
+    chroma_persist_dir: str = Field(..., env='CHROMA_PERSIST_DIR')
+    bm25_index_dir: str = Field(..., env='BM25_INDEX_DIR')
+    
+    evolution_api_url: str = Field(..., env='EVOLUTION_API_URL')
+    evolution_api_key: str = Field(..., env='EVOLUTION_API_KEY')
+    
+    redis_url: str = Field(..., env='REDIS_URL')
+    
+    environment: str = Field(default="development", env='ENVIRONMENT')
+
+    # Configuração para ler o arquivo .env
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+# Instanciamos as configurações para importar no resto do projeto
+settings = Settings()

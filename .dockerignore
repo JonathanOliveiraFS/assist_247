@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Python e Ambientes Virtuais (O grande vilão)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Pastas de Dados Locais e Volumes do Docker (Não devem ir pro build)
+rag_data/
+mcp_servers/
+evolution_instances/
+kestra/
+vectorstore_data/
+raf_files/
+
+# Arquivos de Configuração Sensíveis e Logs
+.env
+*.log

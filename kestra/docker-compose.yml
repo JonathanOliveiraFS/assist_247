@@ -1,0 +1,67 @@
+services:
+  # -------------------------------------------------------------
+  # 1. BANCO DE DADOS ISOLADO PARA O KESTRA
+  # -------------------------------------------------------------
+  postgres_kestra:
+    container_name: postgres_kestra
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=kestra_admin
+      - POSTGRES_PASSWORD=kestra_senha_segura
+      - POSTGRES_DB=kestra_db
+    # Não expomos a porta 5432 no host para não dar conflito com o Postgres do Bot principal
+    volumes:
+      - postgres_kestra_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kestra_admin -d kestra_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # 2. ORQUESTRADOR KESTRA (Motor de Backoffice)
+  # -------------------------------------------------------------
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra_app
+    user: "root"
+    command: server standalone
+    restart: always
+    ports:
+      - "8081:8080" # Mantemos 8081 para não conflitar com a EvolutionAPI
+    volumes:
+      - kestra_data:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock # Necessário para o Kestra rodar automações em Docker
+      # IMPORTANTE: Conecta o Kestra à pasta RAG do motor principal (um nível acima)
+      - ../rag_data:/app/rag_data
+    environment:
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres_kestra:5432/kestra_db
+            driverClassName: org.postgresql.Driver
+            username: kestra_admin
+            password: kestra_senha_segura
+        kestra:
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: "/app/storage"
+          queue:
+            type: postgres
+        micronaut:
+          flyway:
+            datasources:
+              postgres:
+                enabled: true
+      JAVA_OPTS: "-Xmx1g"
+    depends_on:
+      postgres_kestra:
+        condition: service_healthy
+
+volumes:
+  postgres_kestra_data:
+  kestra_data:
