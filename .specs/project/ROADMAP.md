@@ -15,16 +15,18 @@
 - [x] Agrupamento de mensagens do buffer para o LLM
 - [x] Fluxo básico de Resposta Automática
 
-## Fase 4: Inteligência & Conhecimento (RAG) [EM DEFINIÇÃO]
-- [ ] Implementação do `app/rag_service.py` (ChromaDB)
-- [ ] Persistência vetorial em `rag_data/chromadb`
-- [ ] Injeção de contexto no `app/bot_agent.py`
-- [ ] Busca Híbrida (Ensemble: Chroma + BM25)
+## Fase 4: Inteligência & Conhecimento (RAG) [CONCLUÍDO]
+- [x] Implementação do `app/rag_service.py` (ChromaDB)
+- [x] Persistência vetorial em `rag_data/chromadb`
+- [x] Injeção de contexto no `app/bot_agent.py`
+- [x] Busca Híbrida (Ensemble: Chroma + BM25)
 
-## Fase 5: Ferramentas & MCP [PLANEJADO]
-- [ ] Implementação de Clientes MCP no Agente
-- [ ] Integração com `mcp_agenda_clinica`
-- [ ] Integração com `mcp_crm_integra`
+## Fase 5: Ferramentas & MCP [CONCLUÍDO]
+- [x] Implementação de Clientes MCP no Agente (`app/bot_agent.py`)
+- [x] Integração com servidor `mcp_mock` para `agendar_reuniao`
+- [x] Uso de `langchain-mcp-adapters` e `create_react_agent` (LangGraph)
+- [ ] Integração futura com `mcp_agenda_clinica`
+- [ ] Integração futura com `mcp_crm_integra`
 
 ## Fase 6: Human-in-the-Loop & Transbordo [PLANEJADO]
 - [ ] Detecção de intenção de transbordo (IA -> Humano)

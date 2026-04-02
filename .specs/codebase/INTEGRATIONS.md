@@ -11,9 +11,12 @@
 - **Human-in-the-Loop:** Armazena uma flag `tenant:{id}:chat:{phone}:status = 'human'` para pausar o bot.
 
 ## 3. MCP (Model Context Protocol)
-- **Implementação:** O bot atua como `MCP Client`.
-- **Conexão:** Via Stdio ou HTTP com os containers em `mcp_servers/`.
-- **Dinâmica:** Permite que o LLM execute funções externas sem que o código principal precise conhecer os detalhes da implementação da ferramenta.
+- **Implementação:** O bot atua como `MCP Client` utilizando `langchain-mcp-adapters`.
+- **Conexão:** Via transporte `stdio` configurado com `StdioServerParameters`.
+- **Orquestração:** Utiliza `langgraph.prebuilt.create_react_agent` para gerenciar o ciclo de vida de chamadas de ferramentas (Tool Calling).
+- **Servidores:** 
+  - `mcp_mock`: Servidor PoC em Python (FastMCP) que fornece a ferramenta `agendar_reuniao`.
+- **Dinâmica:** O LLM analisa a entrada do usuário e o contexto do RAG. Se necessário, emite uma `tool_call` que é executada pelo cliente MCP antes da resposta final.
 
 ## 4. Kestra
 - **Trigger:** Webhooks ou monitoramento de diretórios/S3.
