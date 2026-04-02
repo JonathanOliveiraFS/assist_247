@@ -50,7 +50,8 @@ async def process_debounced_messages(instance: str, remote_jid: str, redis_manag
         try:
             # 1. Gera a resposta usando o agente LangChain
             from app.bot_agent import process_chat
-            response_text = await process_chat(messages)
+            # PASSAMOS O instance como tenant_id para o RAG
+            response_text = await process_chat(messages, tenant_id=instance)
 
             # 2. Envia a resposta via EvolutionService
             from app.evolution_service import EvolutionService
