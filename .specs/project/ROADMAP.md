@@ -24,7 +24,7 @@
 ## Fase 5: Ferramentas & MCP [CONCLUÍDO]
 - [x] Implementação de Clientes MCP no Agente (`app/bot_agent.py`)
 - [x] Integração com servidor `mcp_mock` para `agendar_reuniao`
-- [x] Uso de `langchain-mcp-adapters` e `create_react_agent` (LangGraph)
+- [x] Uso de `langchain.agents.create_agent` (Padrão LangChain v1.0)
 - [ ] Integração futura com `mcp_agenda_clinica`
 - [ ] Integração futura com `mcp_crm_integra`
 

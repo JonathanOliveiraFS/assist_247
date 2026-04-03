@@ -11,6 +11,8 @@ Processa as mensagens que chegam do WhatsApp via EvolutionAPI.
   - Realiza **Debounce** (agrupa mensagens fragmentadas enviadas em sequência pelo usuário).
 - **LangChain Agent:** 
   - Recebe o texto agrupado.
+  - Utiliza `create_agent` da biblioteca `langchain.agents` (Padrão LangChain v1.0).
+  - Recebe o `system_prompt` (com contexto RAG) diretamente como parâmetro.
   - Decide se precisa consultar a base de conhecimento (RAG) ou executar uma ferramenta (MCP).
 - **EvolutionAPI Wrapper:** Envia a resposta final para o usuário.
 
@@ -25,4 +27,4 @@ Responsável por manter a inteligência do bot atualizada.
 
 ## Multi-tenancy
 - **Isolamento de Dados:** Cada cliente possui sua própria `collection` no ChromaDB e seu próprio arquivo `.pkl` para busca léxica.
-- **Isolamento de Ferramentas:** Servidores MCP rodam em containers separados para garantir que credenciais de APIs de terceiros não se misturem.
+- **Isolamento de Ferramentas:** Servidores MCP rodam em containers separados ou processos isolados. Na Fase 5, o servidor `mcp_mock` está localizado em `mcp_servers/mcp_mock/server.py` e é executado via transporte `stdio`.

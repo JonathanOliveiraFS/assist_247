@@ -12,8 +12,9 @@
 
 ## 3. MCP (Model Context Protocol)
 - **Implementação:** O bot atua como `MCP Client` utilizando `langchain-mcp-adapters`.
-- **Conexão:** Via transporte `stdio` configurado com `StdioServerParameters`.
-- **Orquestração:** Utiliza `langgraph.prebuilt.create_react_agent` para gerenciar o ciclo de vida de chamadas de ferramentas (Tool Calling).
+- **Conexão:** Via transporte `stdio` configurado com `StdioServerParameters`. O servidor está localizado em `mcp_servers/mcp_mock/server.py`.
+- **Orquestração:** Utiliza `create_agent` da biblioteca `langchain.agents` (padrão LangChain v1.0).
+- **Parâmetros:** O `system_prompt` (incluindo o contexto do RAG) é passado diretamente como parâmetro no `create_agent`.
 - **Servidores:** 
   - `mcp_mock`: Servidor PoC em Python (FastMCP) que fornece a ferramenta `agendar_reuniao`.
 - **Dinâmica:** O LLM analisa a entrada do usuário e o contexto do RAG. Se necessário, emite uma `tool_call` que é executada pelo cliente MCP antes da resposta final.
