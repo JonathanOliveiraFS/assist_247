@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     evolution_api_url: str = Field(..., env='EVOLUTION_API_URL')
     evolution_api_key: str = Field(..., env='EVOLUTION_API_KEY')
     
+    admin_number: str = Field(..., env='ADMIN_NUMBER')
+    admin_instance: str = Field(..., env='ADMIN_INSTANCE')
+    
     redis_url: str = Field(..., env='REDIS_URL')
     
     environment: str = Field(default="development", env='ENVIRONMENT')

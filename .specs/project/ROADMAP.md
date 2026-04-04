@@ -28,10 +28,10 @@
 - [ ] Integração futura com `mcp_agenda_clinica`
 - [ ] Integração futura com `mcp_crm_integra`
 
-## Fase 6: Human-in-the-Loop & Transbordo [PLANEJADO]
-- [ ] Detecção de intenção de transbordo (IA -> Humano)
-- [ ] Gerenciamento de estado de atendimento no Redis
-- [ ] Dashboard administrativo simples para transbordo
+## Fase 6: Human-in-the-Loop & Transbordo [CONCLUÍDO]
+- [x] Detecção de intenção de transbordo (IA -> Humano)
+- [x] Gerenciamento de estado de atendimento no Redis (Pausa de 24h)
+- [x] Sistema de notificação instantânea para o Administrador (Evolution API)
 
 ## Fase 7: Backoffice & Pipelines (Kestra) [PLANEJADO]
 - [ ] Pipeline de ingestão automática de documentos
