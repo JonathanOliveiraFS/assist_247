@@ -2,10 +2,12 @@ from typing import List, Optional
 import sys
 import os
 import traceback
+import asyncio
+from datetime import datetime # Importação do relógio restaurada
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
-# 1. A NOVA IMPORTAÇÃO DO LANGCHAIN v1.0
+# Importações LangChain e MCP
 from langchain.agents import create_agent
 from langchain_mcp_adapters.tools import load_mcp_tools
 from mcp import ClientSession, StdioServerParameters
@@ -18,11 +20,20 @@ rag_service = RAGService()
 
 # Calcula o caminho absoluto
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-mcp_script_path = os.path.join(base_dir, "mcp_servers", "mcp_mock", "server.py")
 
-mcp_server_params = StdioServerParameters(
+# Configuração dos múltiplos servidores MCP
+airtable_script = os.path.join(base_dir, "mcp_servers", "airtable", "server.py")
+notion_script = os.path.join(base_dir, "mcp_servers", "notion", "server.py")
+
+airtable_params = StdioServerParameters(
     command=sys.executable,
-    args=[mcp_script_path],
+    args=[airtable_script],
+    env=os.environ.copy()
+)
+
+notion_params = StdioServerParameters(
+    command=sys.executable,
+    args=[notion_script],
     env=os.environ.copy()
 )
 
@@ -42,23 +53,52 @@ async def process_chat(messages: List[str], tenant_id: Optional[str] = None) -> 
             if docs:
                 context_str = "\n\n".join([doc.page_content for doc in docs])
 
+        # --- BLOCO PROTEGIDO: RELÓGIO E IDENTIDADE (NÃO ALTERAR) ---
+        agora = datetime.now().strftime("%d/%m/%Y, %A, %H:%M")
+        
         system_prompt = (
-            "Você é o Integra.ai. Use o contexto para responder.\n"
-            f"CONTEXTO:\n{context_str}\n\n"
-            "Se precisar agendar, use a ferramenta 'agendar_reuniao'."
+            "Você é a BIA, assistente inteligente da Integra.ai.\n"
+            f"DATA E HORA ATUAL: {agora}\n"
+            "IMPORTANTE: Use a data acima como referência absoluta para 'hoje', 'amanhã' ou datas relativas.\n\n"
+            
+            "SUA IDENTIDADE (ESTRATÉGIA COMERCIAL):\n"
+            "- Você atua na configuração, integração técnica e suporte de atendentes virtuais de mercado.\n"
+            "- Seu objetivo é liberar o cliente de tarefas repetitivas para foco em lucro e atendimento pessoal.\n\n"
+            
+            "CONTEXTO ESPECÍFICO DO CLIENTE:\n"
+            f"{context_str}\n\n"
+            
+            "REGRAS DE OURO E USO DE FERRAMENTAS:\n"
+            "1. Não invente dados; use apenas o manual oficial do cliente.\n"
+            "2. Se o usuário quiser agendar uma reunião ou demonstração, use a ferramenta 'agendar_reuniao' (Airtable).\n"
+            "3. Se for um novo contato (lead) interessado nos serviços, use 'registrar_lead' (Notion) com um breve resumo.\n"
+            "4. Você pode e deve usar as DUAS ferramentas na mesma conversa se o cliente for novo e já quiser agendar algo.\n"
+            "5. Sempre confirme o Nome, Telefone e Horário antes de finalizar as ações."
         )
+        # -----------------------------------------------------------
         
-        
-        async with stdio_client(mcp_server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        # Conectando aos dois servidores simultaneamente
+        async with stdio_client(airtable_params) as (air_read, air_write), \
+                   stdio_client(notion_params) as (not_read, not_write):
+            
+            async with ClientSession(air_read, air_write) as air_session, \
+                       ClientSession(not_read, not_write) as not_session:
                 
-                mcp_tools = await load_mcp_tools(session)
+                await asyncio.gather(
+                    air_session.initialize(),
+                    not_session.initialize()
+                )
                 
-                # 2. A CRIAÇÃO DO AGENTE NA v1.0 (Limpo e Direto)
+                # Carrega as ferramentas de ambos os servidores
+                air_tools = await load_mcp_tools(air_session)
+                not_tools = await load_mcp_tools(not_session)
+                
+                # Combina todas as ferramentas
+                all_tools = air_tools + not_tools
+                
                 agent = create_agent(
                     model=llm, 
-                    tools=mcp_tools, 
+                    tools=all_tools, 
                     system_prompt=system_prompt
                 )
                 
