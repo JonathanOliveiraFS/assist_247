@@ -1,49 +1,22 @@
 from typing import List, Optional
-import sys
-import os
 import traceback
-import asyncio
+from datetime import datetime
+import pytz
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-# 1. A NOVA IMPORTAÇÃO DO LANGCHAIN v1.0
+# Importação do agente LangChain (Customizado do projeto)
 from langchain.agents import create_agent
-from langchain_mcp_adapters.tools import load_mcp_tools
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 
 from app.config import settings
 from app.rag_service import RAGService
 
 rag_service = RAGService()
 
-# Calcula o caminho absoluto
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Configuração dos múltiplos servidores MCP
-airtable_script = os.path.join(base_dir, "mcp_servers", "airtable", "server.py")
-notion_script = os.path.join(base_dir, "mcp_servers", "notion", "server.py")
-admin_script = os.path.join(base_dir, "mcp_servers", "admin", "server.py")
-
-airtable_params = StdioServerParameters(
-    command=sys.executable,
-    args=[airtable_script],
-    env=os.environ.copy()
-)
-
-notion_params = StdioServerParameters(
-    command=sys.executable,
-    args=[notion_script],
-    env=os.environ.copy()
-)
-
-admin_params = StdioServerParameters(
-    command=sys.executable,
-    args=[admin_script],
-    env=os.environ.copy()
-)
-
-async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional[str] = None) -> str:
+async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional[str] = None, tools: List = [], redis_manager = None) -> str:
+    """
+    Processa a conversa com Memória Persistente, Noção Temporal e Foco em Experiência do Cliente.
+    """
     try:
         llm = ChatOpenAI(
             api_key=settings.openai_api_key,
@@ -52,66 +25,76 @@ async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional
         )
         
         user_input = "\n".join(messages)
-        context_str = ""
         
+        # 1. Recupera contexto do RAG
+        context_str = ""
         if tenant_id:
             docs = await rag_service.get_relevant_documents(user_input, tenant_id)
             if docs:
                 context_str = "\n\n".join([doc.page_content for doc in docs])
 
+        # 2. Gerenciamento de Memória (Histórico do Redis)
+        history_messages = []
+        if redis_manager and tenant_id:
+            chat_history = await redis_manager.get_chat_history(tenant_id, remote_jid)
+            for msg in chat_history:
+                if msg["role"] == "user":
+                    history_messages.append(HumanMessage(content=msg["content"]))
+                else:
+                    history_messages.append(AIMessage(content=msg["content"]))
+
+        # 3. Noção Temporal
+        tz_br = pytz.timezone('America/Sao_Paulo')
+        now = datetime.now(tz_br)
+        timestamp_str = now.strftime("%A, %d de %B de %Y, às %H:%M:%S")
+
         system_prompt = (
-            "Você é o Integra.ai, um assistente corporativo inteligente para WhatsApp.\n"
-            f"ID DO CHAT ATUAL: {remote_jid}\n\n"
-            f"CONTEXTO DO CLIENTE:\n{context_str}\n\n"
-            "DIRETRIZES DE OPERAÇÃO:\n"
-            "1. Agendamentos: Use 'agendar_reuniao' (Airtable).\n"
-            "2. Novos Leads: Use 'registrar_lead' (Notion CRM).\n"
-            "3. REGRA DE OURO (Transbordo Humano): Se o cliente demonstrar frustração, pedir explicitamente para falar com um humano, "
-            "ou se o assunto for complexo demais para sua base de conhecimento, use a ferramenta 'solicitar_transbordo'.\n"
-            "   - Ao usar 'solicitar_transbordo', informe o remote_jid fornecido acima, o nome do cliente e o motivo.\n"
-            "4. Seja sempre profissional, conciso e útil."
+            "Você é a BIA, assistente inteligente da Integra.ai.\n"
+            f"ID DO CHAT ATUAL: {remote_jid}\n"
+            f"TENANT ID (ID DA INSTÂNCIA): {tenant_id}\n"
+            f"DATA/HORA ATUAL: {timestamp_str}\n\n"
+            
+            "🌟 FILOSOFIA DE ATENDIMENTO (EXPERIÊNCIA DO CLIENTE):\n"
+            "- Fale com o cliente de forma humana, calorosa e personalizada. Use o nome dele se souber!\n"
+            "- 🚫 PROIBIDO: Usar termos técnicos como 'lead', 'notion', 'airtable', 'base de dados', 'ferramenta', 'instância' ou 'registro efetuado'.\n"
+            "- Em vez de 'Lead registrado', diga: 'Já anotei seu contato e seu interesse aqui comigo, [Nome]!'\n"
+            "- Em vez de 'Agendamento realizado', diga: 'Tudo certo! Marquei nosso encontro para [Data/Hora]. Mal posso esperar!'\n\n"
+
+            f"CONTEXTO DO CLIENTE (Sua Base de Conhecimento):\n{context_str}\n\n"
+
+            "🎯 MATRIZ DE DECISÃO E FERRAMENTAS:\n"
+            "1. [CONSULTA]: Antes de agendar qualquer coisa, use 'verificar_disponibilidade' para a data solicitada. Informe ao cliente se o horário está livre ou sugira alternativas se houver conflito.\n"
+            "2. [AGENDA]: Após verificar que o horário está livre, use 'agendar_reuniao'. SEMPRE confirme o dia e hora exatos na sua resposta final.\n"
+            "3. [INTERESSE]: Se o cliente demonstrar interesse mas não for um agendamento imediato, use 'registrar_lead'. Fale de forma acolhedora sobre isso.\n"
+            "4. [TRANSBORDO]: Se o cliente estiver frustrado ou pedir explicitamente para falar com uma pessoa, use 'solicitar_transbordo' imediatamente. Passe o TENANT ID e REMOTE JID corretamente para esta ferramenta.\n\n"
+
+            "⚠️ IMPORTANTE: Você tem acesso ao histórico da conversa acima. Use-o para não ser repetitivo e para lembrar o que o cliente já te disse."
         )
         
-        # Conectando aos três servidores simultaneamente
-        async with stdio_client(airtable_params) as (air_read, air_write), \
-                   stdio_client(notion_params) as (not_read, not_write), \
-                   stdio_client(admin_params) as (adm_read, adm_write):
-            
-            async with ClientSession(air_read, air_write) as air_session, \
-                       ClientSession(not_read, not_write) as not_session, \
-                       ClientSession(adm_read, adm_write) as adm_session:
-                
-                await asyncio.gather(
-                    air_session.initialize(),
-                    not_session.initialize(),
-                    adm_session.initialize()
-                )
-                
-                # Carrega as ferramentas de todos os servidores
-                air_tools = await load_mcp_tools(air_session)
-                not_tools = await load_mcp_tools(not_session)
-                adm_tools = await load_mcp_tools(adm_session)
-                
-                # Combina todas as ferramentas
-                all_tools = air_tools + not_tools + adm_tools
-                
-                # Criação do Agente com multi-ferramentas
-                agent = create_agent(
-                    model=llm, 
-                    tools=all_tools, 
-                    system_prompt=system_prompt
-                )
-                
-                inputs = {"messages": [HumanMessage(content=user_input)]}
-                result = await agent.ainvoke(inputs)
-                
-                return result["messages"][-1].content
+        # 4. Criação do Agente
+        agent = create_agent(
+            model=llm, 
+            tools=tools, 
+            system_prompt=system_prompt
+        )
+        
+        # 5. Invocação
+        inputs = {"messages": history_messages + [HumanMessage(content=user_input)]}
+        result = await agent.ainvoke(inputs)
+        response_text = result["messages"][-1].content
+        
+        # 6. Salva Interação na Memória
+        if redis_manager and tenant_id:
+            await redis_manager.save_chat_history(tenant_id, remote_jid, "user", user_input)
+            await redis_manager.save_chat_history(tenant_id, remote_jid, "assistant", response_text)
+        
+        return response_text
 
     except Exception as e:
-        print("\n" + "="*50)
-        print(f"!!! ERRO CAPTURADO NO AGENTE !!!")
-        print(f"Tipo: {type(e).__name__}")
+        print("\n" + "!"*50)
+        print(f"!!! ERRO CRÍTICO NO AGENTE !!!")
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
-        print("="*50 + "\n")
-        return "Erro técnico ao processar sua solicitação. Verifique os logs."
+        return f"Sinto muito, tive um probleminha técnico aqui. Pode repetir o que você gostaria de fazer?"
+# Nota: No except, usei tenant_id como fallback mas o ideal seria o nome do cliente se disponível. 
+# Como é um erro crítico, o mais importante é não travar.

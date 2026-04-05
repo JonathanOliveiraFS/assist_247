@@ -37,17 +37,6 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["nome", "telefone", "data_hora"],
             },
-        ),
-        types.Tool(
-            name="verificar_disponibilidade",
-            description="Consulta os agendamentos existentes para uma data específica para evitar conflitos.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "data": {"type": "string", "description": "Data para consulta (ex: 2026-04-06 ou 'segunda-feira')"},
-                },
-                "required": ["data"],
-            },
         )
     ]
 
@@ -56,52 +45,50 @@ async def handle_call_tool(
     name: str, arguments: dict[str, Any] | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Executa as ferramentas do MCP."""
-    if not table:
-        return [types.TextContent(type="text", text="Erro: Variáveis de ambiente do Airtable não configuradas.")]
-
-    if not arguments:
-        return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
-
     if name == "agendar_reuniao":
+        if not table:
+            return [types.TextContent(type="text", text="Erro: Variáveis de ambiente do Airtable não configuradas.")]
+
+        if not arguments:
+            return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
+
         nome = arguments.get("nome")
         telefone = arguments.get("telefone")
         data_hora = arguments.get("data_hora")
 
         try:
+            # Cria o registro no Airtable
+            # Nota: Os nomes dos campos devem bater com o que está no Airtable do cliente
+            # Assumindo campos: Nome, Telefone, Data/Hora
             table.create({
                 "Nome": nome,
                 "Telefone": telefone,
                 "Data_Hora": data_hora
             })
-            return [types.TextContent(type="text", text=f"✅ Agendamento confirmado para {nome} em {data_hora}.")]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"❌ Erro ao agendar: {str(e)}")]
-
-    elif name == "verificar_disponibilidade":
-        data_consulta = arguments.get("data")
-        try:
-            # Busca simples: se a data estiver contida no campo Data_Hora
-            # Para uma busca mais robusta, o Airtable exigiria fórmulas (ex: SEARCH)
-            records = table.all()
-            agendamentos = []
-            for r in records:
-                dh = r["fields"].get("Data_Hora", "")
-                if data_consulta in dh:
-                    agendamentos.append(f"- {r['fields'].get('Nome', 'Cliente')}: {dh}")
             
-            if not agendamentos:
-                return [types.TextContent(type="text", text=f"Nenhum agendamento encontrado para {data_consulta}. O horário parece livre.")]
-            
-            lista = "\n".join(agendamentos)
-            return [types.TextContent(type="text", text=f"Agendamentos em {data_consulta}:\n{lista}")]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"✅ Agendamento realizado com sucesso para {nome} em {data_hora}."
+                )
+            ]
         except Exception as e:
-            return [types.TextContent(type="text", text=f"❌ Erro ao consultar disponibilidade: {str(e)}")]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"❌ Erro ao agendar no Airtable: {str(e)}"
+                )
+            ]
 
     raise ValueError(f"Ferramenta desconhecida: {name}")
 
 async def main():
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options()
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())

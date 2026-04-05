@@ -30,11 +30,12 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "tenant_id": {"type": "string", "description": "O ID da instância/cliente (ex: integra02)"},
                     "remote_jid": {"type": "string", "description": "O ID do chat (ex: 5511999999999@s.whatsapp.net)"},
                     "nome": {"type": "string", "description": "Nome do cliente"},
                     "motivo": {"type": "string", "description": "Breve motivo da solicitação de transbordo"},
                 },
-                "required": ["remote_jid", "nome", "motivo"],
+                "required": ["tenant_id", "remote_jid", "nome", "motivo"],
             },
         )
     ]
@@ -51,18 +52,20 @@ async def handle_call_tool(
         if not arguments:
             return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
 
+        tenant_id = arguments.get("tenant_id")
         remote_jid = arguments.get("remote_jid")
         nome = arguments.get("nome")
         motivo = arguments.get("motivo")
 
         try:
-            # 1. Salva no Redis a pausa do bot (24h)
-            status_key = f"status:human:{remote_jid}"
+            # 1. [FIX] Salva no Redis com Multi-tenancy (24h)
+            status_key = f"status:human:{tenant_id}:{remote_jid}"
             await r.set(status_key, "true", ex=86400)
 
             # 2. Notifica o administrador via Evolution API
             notificacao = (
                 f"🚨 *SOLICITAÇÃO DE TRANSBORDO*\n\n"
+                f"🏢 *Tenant:* {tenant_id}\n"
                 f"👤 *Cliente:* {nome}\n"
                 f"📱 *Chat ID:* {remote_jid}\n"
                 f"📝 *Motivo:* {motivo}\n\n"
@@ -80,7 +83,7 @@ async def handle_call_tool(
             return [
                 types.TextContent(
                     type="text",
-                    text=f"✅ Transbordo solicitado. Um atendente humano foi notificado e o bot foi pausado para este chat."
+                    text=f"✅ Transbordo solicitado com sucesso. O bot foi pausado e a equipe de atendimento notificada."
                 )
             ]
         except Exception as e:

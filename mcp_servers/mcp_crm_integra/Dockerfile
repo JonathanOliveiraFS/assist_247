@@ -1,4 +1,11 @@
 FROM python:3.11-slim
 WORKDIR /app
-EXPOSE 8000
-CMD ["echo", "MCP CRM Spec Ready"]
+
+# Instala as dependências necessárias para o MCP
+RUN pip install mcp asyncio
+
+# Copia o código do servidor para dentro do container
+COPY server.py .
+
+# O comando agora roda o Python, mantendo o container VIVO e ouvindo
+CMD ["python", "server.py"]

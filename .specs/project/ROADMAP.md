@@ -23,16 +23,15 @@
 
 ## Fase 5: Ferramentas & MCP [CONCLUÍDO]
 - [x] Implementação de Clientes MCP no Agente (`app/bot_agent.py`)
-- [x] Integração com servidor `mcp_mock` para `agendar_reuniao`
-- [x] Uso de `langchain.agents.create_agent` (Padrão LangChain v1.0)
-- [ ] Integração futura com `mcp_agenda_clinica`
-- [ ] Integração futura com `mcp_crm_integra`
+- [x] Integração com Airtable (Agendamentos)
+- [x] Integração com Notion (CRM baseado no template Centralize)
 
 ## Fase 6: Human-in-the-Loop & Transbordo [CONCLUÍDO]
 - [x] Detecção de intenção de transbordo (IA -> Humano)
 - [x] Gerenciamento de estado de atendimento no Redis (Pausa de 24h)
-- [x] Sistema de notificação instantânea para o Administrador (Evolution API)
+- [x] Sistema de notificação instantânea para o Administrador via Evolution API
 
-## Fase 7: Backoffice & Pipelines (Kestra) [PLANEJADO]
-- [ ] Pipeline de ingestão automática de documentos
-- [ ] Invalidação de cache e recarga de índices RAG
+## Fase 7: Backoffice & Pipelines (Kestra) [PRÓXIMO PASSO]
+- [ ] Orquestração de tarefas de manutenção do RAG
+- [ ] Monitoramento de saúde dos servidores e APIs
+- [ ] Automação de relatórios semanais de leads

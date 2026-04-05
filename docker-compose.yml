@@ -78,6 +78,7 @@ services:
       - "8001:8000" # Exposto na porta 8001 para o bot consumir
     env_file:
       - .env
+    command: python server.py
 
   mcp-crm:
     container_name: mcp_crm_integra
@@ -87,6 +88,7 @@ services:
       - "8002:8000" # Exposto na porta 8002
     env_file:
       - .env
+    command: python server.py
 
 volumes:
   postgres_data:
