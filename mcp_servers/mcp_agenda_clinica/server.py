@@ -26,6 +26,17 @@ async def handle_list_tools() -> list[types.Tool]:
     """Lista as ferramentas disponíveis."""
     return [
         types.Tool(
+            name="verificar_disponibilidade",
+            description="Verifica se um horário já está ocupado no Airtable",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "data_hora": {"type": "string", "description": "Data e hora para verificar (formato exato no Airtable)"},
+                },
+                "required": ["data_hora"],
+            },
+        ),
+        types.Tool(
             name="agendar_reuniao",
             description="Agenda uma reunião/atendimento na base do Airtable",
             inputSchema={
@@ -40,26 +51,53 @@ async def handle_list_tools() -> list[types.Tool]:
         )
     ]
 
+def _check_disponibilidade(data_hora: str) -> bool:
+    """Função interna para verificar se o horário existe no Airtable."""
+    if not table:
+        return False
+    # Filtra registros onde a coluna Data_Hora é igual ao valor fornecido
+    # Nota: Usamos aspas simples para cercar o valor da string na fórmula
+    formula = f"{{Data_Hora}} = '{data_hora}'"
+    records = table.all(formula=formula)
+    return len(records) > 0
+
 @server.call_tool()
 async def handle_call_tool(
     name: str, arguments: dict[str, Any] | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Executa as ferramentas do MCP."""
+    if not table:
+        return [types.TextContent(type="text", text="Erro: Variáveis de ambiente do Airtable não configuradas.")]
+
+    if not arguments:
+        return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
+
+    if name == "verificar_disponibilidade":
+        data_hora = arguments.get("data_hora")
+        if not data_hora:
+            return [types.TextContent(type="text", text="Erro: data_hora é obrigatório.")]
+        
+        ocupado = _check_disponibilidade(data_hora)
+        status = "OCUPADO" if ocupado else "DISPONÍVEL"
+        return [types.TextContent(type="text", text=f"O horário {data_hora} está {status}.")]
+
     if name == "agendar_reuniao":
-        if not table:
-            return [types.TextContent(type="text", text="Erro: Variáveis de ambiente do Airtable não configuradas.")]
-
-        if not arguments:
-            return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
-
         nome = arguments.get("nome")
         telefone = arguments.get("telefone")
         data_hora = arguments.get("data_hora")
 
+        # [TASK-02] Verificação de Conflito Interna
+        if _check_disponibilidade(data_hora):
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"❌ Conflito de Horário: O horário {data_hora} já está reservado por outro cliente. Por favor, escolha outro horário."
+                )
+            ]
+
         try:
             # Cria o registro no Airtable
-            # Nota: Os nomes dos campos devem bater com o que está no Airtable do cliente
-            # Assumindo campos: Nome, Telefone, Data/Hora
+            # Nota: O nome do campo deve ser 'Nome' (N maiúsculo)
             table.create({
                 "Nome": nome,
                 "Telefone": telefone,

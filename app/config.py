@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     
     chroma_persist_dir: str = Field(..., env='CHROMA_PERSIST_DIR')
     bm25_index_dir: str = Field(..., env='BM25_INDEX_DIR')
+    rag_docs_dir: str = Field(default='/app/rag_data/docs', env='RAG_DOCS_DIR')
     
     evolution_api_url: str = Field(..., env='EVOLUTION_API_URL')
     evolution_api_key: str = Field(..., env='EVOLUTION_API_KEY')

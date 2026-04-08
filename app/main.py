@@ -113,6 +113,11 @@ async def evolution_webhook(payload: dict, background_tasks: BackgroundTasks):
     if not remote_jid or not instance:
         return {"status": "error", "message": "Faltando instance ou remote_jid"}
 
+    # --- [TASK-01] Blindagem de Privacidade: Ignora Grupos ---
+    if "@g.us" in remote_jid:
+        print(f"Mensagem de grupo ignorada: {remote_jid}")
+        return {"status": "ignored_group"}
+
     if await app.state.redis_manager.is_human_active(instance, remote_jid):
         return {"status": "human_active"}
 

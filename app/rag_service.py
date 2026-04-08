@@ -25,6 +25,8 @@ class RAGService:
         )
         self.persist_directory = settings.chroma_persist_dir
         self.bm25_index_dir = settings.bm25_index_dir
+        # Cache em memória para evitar IO excessivo
+        self.bm25_retrievers = {}
 
     def _get_vectorstore(self, tenant_id: str) -> Chroma:
         """Instancia o banco vetorial isolado por tenant."""
@@ -38,18 +40,32 @@ class RAGService:
     def _load_bm25_retriever(self, tenant_id: str) -> Optional[BM25Retriever]:
         """
         Tenta carregar o índice BM25 do disco para o tenant específico.
-        [REQUISITO 3] Fallback gracioso se o índice não existir.
+        [TASK-03] Se o índice não existir (Cenário B), tenta realizar o Auto-Build.
         """
+        # Verifica Cache em memória primeiro
+        if tenant_id in self.bm25_retrievers:
+            return self.bm25_retrievers[tenant_id]
+
         bm25_path = os.path.join(self.bm25_index_dir, f"{tenant_id}_index.pkl")
         
         if not os.path.exists(bm25_path):
-            logger.warning(f"Índice BM25 não encontrado para tenant '{tenant_id}' em: {bm25_path}. Operando apenas com Busca Semântica.")
-            return None
+            logger.info(f"Índice BM25 não encontrado para '{tenant_id}'. Iniciando Cenário B: Auto-Build...")
+            try:
+                # Import dinâmico para evitar problemas de dependência circular
+                from scripts.build_bm25 import build_tenant_index
+                success = build_tenant_index(tenant_id)
+                if not success:
+                    logger.warning(f"Auto-Build falhou para o tenant '{tenant_id}'.")
+                    return None
+            except Exception as e:
+                logger.error(f"Erro ao disparar Auto-Build para '{tenant_id}': {e}")
+                return None
         
         try:
             with open(bm25_path, "rb") as f:
-                # O arquivo pkl deve conter uma instância já treinada de BM25Retriever
                 retriever = pickle.load(f)
+                # Salva no cache
+                self.bm25_retrievers[tenant_id] = retriever
                 return retriever
         except Exception as e:
             logger.error(f"Erro ao carregar índice BM25 para tenant '{tenant_id}': {e}")
@@ -69,8 +85,8 @@ class RAGService:
         lexical_docs = []
         if bm25_retriever:
             try:
-                # Executa busca léxica síncrona (comum no rank-bm25)
-                lexical_docs = bm25_retriever.get_relevant_documents(query)[:k]
+                # Executa busca léxica (usando invoke para compatibilidade)
+                lexical_docs = bm25_retriever.invoke(query)[:k]
             except Exception as e:
                 logger.error(f"Erro na execução da busca BM25: {e}")
 
