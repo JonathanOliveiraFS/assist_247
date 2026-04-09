@@ -1,0 +1,30 @@
+id: rag_sync
+namespace: io.integra.ai
+
+description: "Pipeline de Build do RAG (Isolado e Otimizado)"
+
+triggers:
+  - id: webhook
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: "integra_secret_key_2024"
+
+tasks:
+  - id: execute_rag_script
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    env:
+      CHROMA_PERSIST_DIR: "/app/rag_data/chromadb"
+      BM25_INDEX_DIR: "/app/rag_data/bm25_indexes"
+      RAG_DOCS_DIR: "/app/rag_data/docs"
+      OPENAI_API_KEY: "{{ secret('OPENAI_API_KEY') }}"
+    commands:
+      - |
+        if [ ! -d "/app/scripts/venv_kestra" ]; then
+          echo "Criando ambiente virtual e instalando dependências..."
+          python3 -m venv /app/scripts/venv_kestra
+          /app/scripts/venv_kestra/bin/pip install -q langchain-community langchain-chroma langchain-openai pypdf docx2txt pydantic-settings
+        else
+          echo "Ambiente virtual encontrado. Startup instantâneo!"
+        fi
+      - /app/scripts/venv_kestra/bin/python /app/scripts/build_bm25.py {{ trigger.body.tenant_id ?? 'integra_ai' }}

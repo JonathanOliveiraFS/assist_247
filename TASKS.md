@@ -26,3 +26,25 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
   1. Criar/atualizar `scripts/build_bm25.py` para processar a pasta `rag_data/docs` do respectivo tenant. Obs: Note que os pdfs ficarão na pasta docs dentro de rag_data.
   2. Implementar lógica condicional na chegada da mensagem: se o contexto já existe na instância, usá-lo imediatamente (Cenário A); se não existe (Cenário B - 1ª mensagem), disparar o Auto-Build e salvar em cache.
   3. **Tratamento de Timeout:** O Cenário B (Auto-Build) deve ser executado de forma assíncrona ou com tratamento de timeout adequado, garantindo que o tempo de leitura, chunking e indexação não derrube a requisição do webhook da Evolution API.
+
+## 3. Sprint: Sistema Nervoso Central & Operações (Kestra 1.3+)
+
+### [TASK-7.1] Pipeline de RAG Assíncrono (Event-Driven)
+- **Regra:** Transferir o "Auto-Build" do RAG do FastAPI para o Kestra usando gatilhos event-driven.
+- **Critério de Aceite:** O RAG deve rodar em background via Kestra sem causar timeout no Webhook da Evolution API. O bot deve apenas sinalizar a necessidade ou aguardar a notificação de conclusão.
+
+### [TASK-7.2] Deep Health Monitor
+- **Regra:** Fluxo de monitoramento contínuo dos serviços críticos.
+- **Critério de Aceite:** Fluxo no Kestra realizando pings em Redis, OpenAI API e instâncias da Evolution API, disparando alertas (ex: via WhatsApp/Email) em caso de falha.
+
+### [TASK-7.3] Relatórios B2B Automatizados
+- **Regra:** Agregação semanal de métricas de atendimento.
+- **Critério de Aceite:** Fluxo agregando métricas por `tenant_id` no Notion/Airtable e enviando um resumo via Evolution API para os gestores.
+
+### [TASK-7.4] FinOps - Governança de IA
+- **Regra:** Rastreamento de custos e uso de tokens.
+- **Critério de Aceite:** Job que rastreia o uso de tokens da OpenAI por `tenant_id`, mantendo histórico e disparando alertas ao atingir limites predefinidos.
+
+### [TASK-7.5] CRM Proativo (Follow-up)
+- **Regra:** Reativação de leads ociosos.
+- **Critério de Aceite:** Trigger que busca leads sem interação recente no Notion e aciona o bot para um follow-up personalizado.

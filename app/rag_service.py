@@ -49,17 +49,28 @@ class RAGService:
         bm25_path = os.path.join(self.bm25_index_dir, f"{tenant_id}_index.pkl")
         
         if not os.path.exists(bm25_path):
-            logger.info(f"Índice BM25 não encontrado para '{tenant_id}'. Iniciando Cenário B: Auto-Build...")
-            try:
-                # Import dinâmico para evitar problemas de dependência circular
-                from scripts.build_bm25 import build_tenant_index
-                success = build_tenant_index(tenant_id)
-                if not success:
-                    logger.warning(f"Auto-Build falhou para o tenant '{tenant_id}'.")
-                    return None
-            except Exception as e:
-                logger.error(f"Erro ao disparar Auto-Build para '{tenant_id}': {e}")
-                return None
+            logger.info(f"Índice BM25 não encontrado para '{tenant_id}'. Disparando Task 7.1 no Kestra...")
+            # Chamada assíncrona ao Kestra (Fire and Forget)
+            import httpx
+            import asyncio
+
+            async def trigger_kestra():
+                try:
+                    kestra_url = "http://kestra_integra:8080/api/v1/executions/webhook/io.integra.ai/rag_sync/integra_secret_key_2024"
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(kestra_url, json={"tenant_id": tenant_id}, timeout=2.0)
+                        if response.status_code == 200:
+                            logger.info(f"Kestra acionado com sucesso para o tenant '{tenant_id}'.")
+                        else:
+                            logger.error(f"Falha ao acionar Kestra: {response.text}")
+                except Exception as e:
+                    logger.error(f"Erro ao conectar no Kestra: {e}")
+
+            # Disparamos a tarefa em background sem bloquear o fluxo principal
+            asyncio.create_task(trigger_kestra())
+            
+            # Retornamos None para que o bot saiba que o índice está sendo construído
+            return None
         
         try:
             with open(bm25_path, "rb") as f:
