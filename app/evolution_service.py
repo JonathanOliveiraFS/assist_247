@@ -21,7 +21,7 @@ class EvolutionService:
             "delay": 1200
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(url, json=payload, headers=headers)
             
             # Adicionamos este print para ver exatamente o que a Evolution responde se der erro

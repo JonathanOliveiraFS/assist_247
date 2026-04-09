@@ -47,7 +47,7 @@ async def process_debounced_messages(instance: str, remote_jid: str, redis_manag
         return
 
     # 2. Trava de Processamento (Distributed Lock)
-    if not await redis_manager.acquire_processing_lock(instance, remote_jid, ex=60):
+    if not await redis_manager.acquire_processing_lock(instance, remote_jid, ex=120):
         print(f"Chat {remote_jid} já em processamento. Ignorando tarefa redundante.")
         return
 

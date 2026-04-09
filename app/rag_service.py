@@ -27,6 +27,8 @@ class RAGService:
         self.bm25_index_dir = settings.bm25_index_dir
         # Cache em memória para evitar IO excessivo
         self.bm25_retrievers = {}
+        # Rastreia o mtime do arquivo .pkl por tenant para detectar atualizações do Kestra
+        self.bm25_mtimes = {}
 
     def _get_vectorstore(self, tenant_id: str) -> Chroma:
         """Instancia o banco vetorial isolado por tenant."""
@@ -42,11 +44,21 @@ class RAGService:
         Tenta carregar o índice BM25 do disco para o tenant específico.
         [TASK-03] Se o índice não existir (Cenário B), tenta realizar o Auto-Build.
         """
-        # Verifica Cache em memória primeiro
-        if tenant_id in self.bm25_retrievers:
-            return self.bm25_retrievers[tenant_id]
-
         bm25_path = os.path.join(self.bm25_index_dir, f"{tenant_id}_index.pkl")
+
+        # Verifica Cache em memória com validação de mtime para detectar rebuild pelo Kestra
+        if tenant_id in self.bm25_retrievers:
+            try:
+                current_mtime = os.path.getmtime(bm25_path)
+                if current_mtime <= self.bm25_mtimes.get(tenant_id, 0):
+                    return self.bm25_retrievers[tenant_id]
+                logger.info(f"Novo arquivo RAG detectado pelo mtime para '{tenant_id}'. Recarregando cache...")
+                del self.bm25_retrievers[tenant_id]
+                del self.bm25_mtimes[tenant_id]
+            except OSError:
+                # Arquivo sumiu após estar no cache — limpa e segue o fluxo normal
+                del self.bm25_retrievers[tenant_id]
+                self.bm25_mtimes.pop(tenant_id, None)
         
         if not os.path.exists(bm25_path):
             logger.info(f"Índice BM25 não encontrado para '{tenant_id}'. Disparando Task 7.1 no Kestra...")
@@ -56,9 +68,10 @@ class RAGService:
 
             async def trigger_kestra():
                 try:
-                    kestra_url = "http://kestra_integra:8080/api/v1/executions/webhook/io.integra.ai/rag_sync/integra_secret_key_2024"
+                    webhook_key = os.getenv("KESTRA_WEBHOOK_KEY", "fallback_key_aqui")
+                    kestra_url = f"http://kestra_integra:8080/api/v1/executions/webhook/io.integra.ai/rag_sync/{webhook_key}"
                     async with httpx.AsyncClient() as client:
-                        response = await client.post(kestra_url, json={"tenant_id": tenant_id}, timeout=2.0)
+                        response = await client.post(kestra_url, json={"tenant_id": tenant_id}, timeout=3.0)
                         if response.status_code == 200:
                             logger.info(f"Kestra acionado com sucesso para o tenant '{tenant_id}'.")
                         else:
@@ -75,8 +88,9 @@ class RAGService:
         try:
             with open(bm25_path, "rb") as f:
                 retriever = pickle.load(f)
-                # Salva no cache
+                # Salva no cache junto com o mtime atual do arquivo
                 self.bm25_retrievers[tenant_id] = retriever
+                self.bm25_mtimes[tenant_id] = os.path.getmtime(bm25_path)
                 return retriever
         except Exception as e:
             logger.error(f"Erro ao carregar índice BM25 para tenant '{tenant_id}': {e}")

@@ -27,7 +27,33 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
   2. Implementar lógica condicional na chegada da mensagem: se o contexto já existe na instância, usá-lo imediatamente (Cenário A); se não existe (Cenário B - 1ª mensagem), disparar o Auto-Build e salvar em cache.
   3. **Tratamento de Timeout:** O Cenário B (Auto-Build) deve ser executado de forma assíncrona ou com tratamento de timeout adequado, garantindo que o tempo de leitura, chunking e indexação não derrube a requisição do webhook da Evolution API.
 
-## 3. Sprint: Sistema Nervoso Central & Operações (Kestra 1.3+)
+## 3. Sprint: Hardening de Infraestrutura (DevSecOps)
+
+### [TASK-SEC-C3] Remoção de Hardcoded Secrets
+- [x] **Regra:** Nenhuma chave ou segredo pode estar hardcoded no código-fonte.
+- [x] **Critério de Aceite:** A chave do webhook do Kestra em `app/rag_service.py` foi substituída por `os.getenv("KESTRA_WEBHOOK_KEY", "fallback_key_aqui")`. Adicionar `KESTRA_WEBHOOK_KEY` ao `.env`.
+
+### [TASK-SEC-C4] Fechamento de Portas Expostas
+- [x] **Regra:** Serviços internos não devem expor portas no host de produção.
+- [x] **Critério de Aceite:** Removidos os blocos `ports:` de `postgres` (5432) e `redis` (6379) no `docker-compose.yml`. Acesso ocorre exclusivamente via rede interna Docker.
+
+### [TASK-SEC-A5] Remoção de Privilégios Excessivos (Kestra)
+- [x] **Regra:** O container do Kestra não deve ter acesso ao daemon Docker do host.
+- [x] **Critério de Aceite:** Removido o volume `- /var/run/docker.sock:/var/run/docker.sock` do serviço `kestra`. O Smart Cache com venv (`venv_kestra`) elimina a necessidade do Docker runner.
+
+### [TASK-SEC-M2] Timeouts em Chamadas HTTP Externas
+- [x] **Regra:** Todo `httpx.AsyncClient` deve ter timeout explícito para evitar travamento do bot.
+- [x] **Critério de Aceite:** `evolution_service.py` → `timeout=15.0`. `rag_service.py` (Fire & Forget Kestra) → `timeout=3.0`.
+
+### [TASK-SEC-A2] TTL do Distributed Lock (Race Condition)
+- [x] **Regra:** O TTL de 60s do lock de processamento é insuficiente para tarefas complexas com MCPs.
+- [x] **Critério de Aceite:** `app/main.py` → chamada `acquire_processing_lock(..., ex=120)` alterada para 120 segundos.
+
+### [TASK-SEC-A3] Smart Cache Invalidation via mtime (RAG)
+- [x] **Regra:** O cache em memória do BM25 não detecta quando o Kestra rebuild o arquivo `.pkl` no disco.
+- [x] **Critério de Aceite:** `app/rag_service.py` → adicionado `self.bm25_mtimes = {}` no `__init__`. A função `_load_bm25_retriever` compara `os.path.getmtime(bm25_path)` com o mtime salvo; se o arquivo for mais recente, invalida o cache e recarrega. Sem bibliotecas externas (apenas `os` nativo).
+
+## 4. Sprint: Sistema Nervoso Central & Operações (Kestra 1.3+)
 
 ### [TASK-7.1] Pipeline de RAG Assíncrono (Event-Driven)
 - **Regra:** Transferir o "Auto-Build" do RAG do FastAPI para o Kestra usando gatilhos event-driven.

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker exec kestra_integra:*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(docker pull:*)",
+      "Bash(docker run:*)"
+    ]
+  }
+}
