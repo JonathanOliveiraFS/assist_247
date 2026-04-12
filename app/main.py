@@ -1,10 +1,14 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import FastAPI, Request, BackgroundTasks
 from app.config import settings
 from app.redis_manager import RedisManager
 from app.mcp_manager import MCPManager
+from app.tenant_config import TENANT_CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 # --- Lifespan Logic: Gerenciamento de Estado Global ---
@@ -112,6 +116,11 @@ async def evolution_webhook(payload: dict, background_tasks: BackgroundTasks):
 
     if not remote_jid or not instance:
         return {"status": "error", "message": "Faltando instance ou remote_jid"}
+
+    # --- [TASK-DEP-2.2] Validação de Tenant ID ---
+    if instance not in TENANT_CONFIG:
+        logger.warning(f"Instância desconhecida ignorada: {instance}")
+        return {"status": "ignored_unknown_tenant"}
 
     # --- [TASK-01] Blindagem de Privacidade: Ignora Grupos ---
     if "@g.us" in remote_jid:

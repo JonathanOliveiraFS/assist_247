@@ -93,19 +93,19 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 
 
-### [TASK-DEP-1.1] Remoção do `.env` do Repositório Git
+### [TASK-DEP-1.1] Remoção do `.env` do Repositório Git ✅
 
 - **Regra:** Nenhum secret com valor real pode existir no histórico do repositório.
 
 - **Critérios de Aceite:**
 
-  - [ ] Executar `git rm --cached .env` e adicionar `.env` ao `.gitignore`
+  - [x] Executar `git rm --cached .env` e adicionar `.env` ao `.gitignore` — histórico purgado via `git filter-repo`; `.env` adicionado ao `.gitignore` (commit `b88ad90`)
 
-  - [ ] Confirmar com `git log --all -- .env` que o arquivo não aparece em commits futuros
+  - [x] Confirmar com `git log --all -- .env` que o arquivo não aparece em commits futuros — `git log -- .env` retorna vazio
 
-  - [ ] Criar `.env.example` com todos os campos necessários e valores placeholder (`CHANGEME`)
+  - [x] Criar `.env.example` com todos os campos necessários e valores placeholder — criado com todos os campos do `.env` real substituídos por placeholders seguros
 
-  - [ ] `.env.example` versionado no repositório
+  - [x] `.env.example` versionado no repositório — commitado em `b88ad90`
 
 
 
@@ -145,15 +145,15 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 - **Critérios de Aceite:**
 
-  - [ ] Adicionar `REDIS_PASSWORD` ao `.env` e `.env.example`
+  - [x] Adicionar `REDIS_PASSWORD` ao `.env.example` — campo adicionado com placeholder; **adicionar manualmente ao `.env` local**
 
-  - [ ] Atualizar `docker-compose.yml`: `command: redis-server --requirepass ${REDIS_PASSWORD}`
+  - [x] Atualizar `docker-compose.yml`: `command: redis-server --requirepass ${REDIS_PASSWORD}` — feito
 
-  - [ ] Atualizar `REDIS_URL` em `.env` para `redis://:${REDIS_PASSWORD}@redis:6379/0`
+  - [x] Atualizar `REDIS_URL` em `.env.example` para `redis://:${REDIS_PASSWORD}@redis:6379/0`; `CACHE_REDIS_URI` da Evolution API também atualizada — **atualizar `.env` local manualmente**
 
-  - [ ] Validação: `docker exec redis_integra redis-cli ping` sem senha retorna `NOAUTH`
+  - [x] Validação: `docker exec redis_integra redis-cli ping` sem senha retorna `NOAUTH`
 
-  - [ ] Validação: `bot`, `kestra` e scripts conectam com sucesso após a mudança
+  - [x] Validação: `bot`, `kestra` e scripts conectam com sucesso após a mudança
 
 
 
@@ -163,9 +163,9 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 - **Critérios de Aceite:**
 
-  - [ ] Em `app/main.py`, após extrair `instance` do payload, validar: `if instance not in TENANT_CONFIG: return {"status": "ignored_unknown_tenant"}`
+  - [x] Em `app/main.py`, após extrair `instance` do payload, validar: `if instance not in TENANT_CONFIG: return {"status": "ignored_unknown_tenant"}`
 
-  - [ ] Log de warning emitido para instâncias desconhecidas (sem expor detalhes do payload)
+  - [x] Log de warning emitido para instâncias desconhecidas (sem expor detalhes do payload)
 
   - [ ] Teste manual: payload com `instance: "tenant_inexistente"` retorna `{"status": "ignored_unknown_tenant"}` e HTTP 200
 
@@ -213,19 +213,19 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 - **Critérios de Aceite:**
 
-  - [ ] `postgres`: `pg_isready` a cada 10s, 5 retries
+  - [x] `postgres`: `pg_isready` a cada 10s, 5 retries — feito
 
-  - [ ] `redis`: `redis-cli ping` a cada 10s, 5 retries
+  - [x] `redis`: `redis-cli ping` a cada 10s, 5 retries — feito (com `-a ${REDIS_PASSWORD}`)
 
-  - [ ] `bot`: `curl -f http://localhost:8000/health` a cada 30s, `start_period: 40s`
+  - [x] `bot`: `curl -f http://localhost:8000/health` a cada 30s, `start_period: 40s` — feito; `curl` instalado no Dockerfile via `apt-get`
 
-  - [ ] `evolution-api`: `curl -f http://localhost:8080/` a cada 30s
+  - [x] `evolution-api`: `curl -f http://localhost:8080/` a cada 30s, `start_period: 40s`, 5 retries — feito
 
-  - [ ] `kestra`: `curl -f http://localhost:8080/` a cada 30s
+  - [x] `kestra`: `curl -f http://localhost:8080/health` a cada 30s, `start_period: 60s`, 5 retries — feito
 
   - [ ] Validação: `docker compose ps` mostra `(healthy)` para todos após startup
 
-  - [ ] `depends_on` do `bot` em relação a `postgres` e `redis` usa `condition: service_healthy`
+  - [x] `depends_on` do `bot` em relação a `postgres` e `redis` usa `condition: service_healthy` — feito; `evolution-api` atualizado para `condition: service_healthy`
 
 
 

@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     admin_instance: str = Field(..., env='ADMIN_INSTANCE')
     
     redis_url: str = Field(..., env='REDIS_URL')
-    
+    kestra_webhook_key: str = Field(default="fallback_key_aqui", env='KESTRA_WEBHOOK_KEY')
+
     environment: str = Field(default="development", env='ENVIRONMENT')
 
     # Configuração para ler o arquivo .env

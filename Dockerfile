@@ -8,6 +8,9 @@ ENV PYTHONUNBUFFERED=1
 # Define o diretório de trabalho dentro do container
 WORKDIR /app
 
+# curl é necessário para o healthcheck do Docker Compose
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Instala o uv (o gerenciador de pacotes ultrarrápido)
 RUN pip install uv
 
