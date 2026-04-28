@@ -54,24 +54,21 @@ async def handle_call_tool(
         data_atual = datetime.now().isoformat()
 
         try:
-            # Lógica de Inserção no Notion (Mapeamento de Colunas)
-            # - Nome: Title
-            # - Telefone: Rich Text 'Telefone'
-            # - Status: Select 'Contato'
-            # - Serviço: Select 'Configuração e Integração'
-            # - Data contato: Date (current)
-            # - Observações: Rich Text 'Observações'
-            
-            notion.pages.create(
-                parent={"database_id": NOTION_DATABASE_ID},
-                properties={
-                    "Nome": {"title": [{"text": {"content": nome}}]},
-                    "Telefone": {"rich_text": [{"text": {"content": telefone}}]},
-                    "Status": {"select": {"name": "Contato"}},
-                    "Serviço": {"select": {"name": "Configuração e Integração"}},
-                    "Data contato": {"date": {"start": data_atual}},
-                    "Observações": {"rich_text": [{"text": {"content": resumo}}]},
-                }
+            # Lógica de Inserção no Notion com Timeout de 5s
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    notion.pages.create,
+                    parent={"database_id": NOTION_DATABASE_ID},
+                    properties={
+                        "Nome": {"title": [{"text": {"content": nome}}]},
+                        "Telefone": {"rich_text": [{"text": {"content": telefone}}]},
+                        "Status": {"select": {"name": "Contato"}},
+                        "Serviço": {"select": {"name": "Configuração e Integração"}},
+                        "Data contato": {"date": {"start": data_atual}},
+                        "Observações": {"rich_text": [{"text": {"content": resumo}}]},
+                    }
+                ),
+                timeout=5.0
             )
             
             return [
@@ -80,11 +77,18 @@ async def handle_call_tool(
                     text=f"✅ Lead '{nome}' registrado com sucesso no Notion CRM."
                 )
             ]
+        except asyncio.TimeoutError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text="❌ Erro de Conexão: O Notion demorou muito para responder. O lead pode não ter sido salvo. Por favor, tente novamente."
+                )
+            ]
         except Exception as e:
             return [
                 types.TextContent(
                     type="text",
-                    text=f"❌ Erro ao registrar lead no Notion: {str(e)}"
+                    text=f"❌ Erro operacional no MCP Notion: {str(e)}"
                 )
             ]
 

@@ -4,6 +4,7 @@ import operator
 from datetime import datetime
 import pytz
 import os
+import logging
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage, ToolMessage
@@ -13,8 +14,11 @@ from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.core.config import settings
+from app.core.redis_manager import RedisManager
 from app.services.rag_service import RAGService
 from app.core.tenant_config import TENANT_CONFIG
+
+logger = logging.getLogger(__name__)
 
 # --- Definição do Estado do Agente (Harness State) ---
 class AgentState(TypedDict):
@@ -166,7 +170,6 @@ async def human_node(state: AgentState):
     """
     [TASK-H4] Nó de Transbordo Humano Nativo.
     """
-    from app.core.redis_manager import RedisManager
     redis = RedisManager()
     await redis.set_human_status(state["tenant_id"], state["remote_jid"], True)
     
@@ -189,10 +192,17 @@ def should_continue(state: AgentState):
         return "tools"
     return "summarize" # [TASK-H5] Vai para o resumo antes de terminar
 
-async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional[str] = None, tools: List = [], redis_manager = None) -> str:
+async def process_chat(
+    messages: List[str], 
+    remote_jid: str, 
+    tenant_id: Optional[str] = None, 
+    tools: Optional[List] = None, 
+    redis_manager: Optional[RedisManager] = None
+) -> str:
     """
     EntryPoint para o Webhook: Orquestra o LangGraph com Checkpointing e HITL.
     """
+    tools = tools or []
     try:
         user_input = "\n".join(messages)
         tz_br = pytz.timezone('America/Sao_Paulo')
@@ -260,7 +270,12 @@ async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional
             if snapshot.next:
                 return "Sua solicitação (ação do sistema) está aguardando aprovação de um supervisor. Avisaremos assim que for processada."
 
-            response_text = result["messages"][-1].content
+            final_messages = result.get("messages", [])
+            if not final_messages:
+                logger.warning(f"Nenhuma mensagem retornada pelo grafo para {remote_jid}")
+                return "Desculpe, não consegui gerar uma resposta agora."
+
+            response_text = final_messages[-1].content
             if redis_manager and tenant_id:
                 await redis_manager.save_chat_history(tenant_id, remote_jid, "user", user_input)
                 await redis_manager.save_chat_history(tenant_id, remote_jid, "assistant", response_text)
@@ -268,6 +283,5 @@ async def process_chat(messages: List[str], remote_jid: str, tenant_id: Optional
             return response_text
 
     except Exception as e:
-        print(f"!!! ERRO NO HARNESS (H4) !!!: {e}")
-        traceback.print_exc()
+        logger.error(f"Erro fatal no processamento do chat (Harness H1) para {remote_jid}: {e}", exc_info=True)
         return "Erro ao processar sua solicitação."

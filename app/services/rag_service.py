@@ -9,8 +9,7 @@ from langchain_core.documents import Document
 from app.core.config import settings
 
 # Configuração de logs para auditoria do RAG
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("RAG_Service")
+logger = logging.getLogger(__name__)
 
 class RAGService:
     def __init__(self):

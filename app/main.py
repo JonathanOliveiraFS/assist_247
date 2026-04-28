@@ -6,7 +6,10 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from app.core.config import settings
 from app.core.redis_manager import RedisManager
 from app.core.mcp_manager import MCPManager
+from app.services.evolution_service import EvolutionService
 from app.core.tenant_config import TENANT_CONFIG
+
+from app.models.webhook import WebhookPayload
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +23,23 @@ async def lifespan(app: FastAPI):
     # 2. Inicialização Única dos MCPs (Pooling de Subprocessos)
     app.state.mcp_manager = MCPManager()
     await app.state.mcp_manager.start()
+
+    # 3. Inicializa o EvolutionService (Singleton com pooling de conexões)
+    app.state.evolution_service = EvolutionService()
     
     try:
         await app.state.redis_manager.ping()
-        print("✅ Conexão com Redis estabelecida.")
+        logger.info("Conexão com Redis estabelecida com sucesso.")
     except Exception as e:
-        print(f"❌ ERRO Crítico de Conexão (Redis): {e}")
+        logger.error(f"ERRO Crítico de Conexão (Redis): {e}", exc_info=True)
     
     yield
     
     # Encerramento gracioso dos recursos
-    print("🧹 Limpando recursos no Shutdown...")
+    logger.info("Limpando recursos no Shutdown (FastAPI Lifecycle)...")
     await app.state.mcp_manager.stop()
     await app.state.redis_manager.close()
+    await app.state.evolution_service.close()
 
 app = FastAPI(
     title="Integra.ai - Motor de Tempo Real (Memory & Time Edition)",
@@ -40,19 +47,25 @@ app = FastAPI(
 )
 
 # --- Helper function for Debounce Task ---
-async def process_debounced_messages(instance: str, remote_jid: str, redis_manager: RedisManager, mcp_manager: MCPManager):
+async def process_debounced_messages(
+    instance: str, 
+    remote_jid: str, 
+    redis_manager: RedisManager, 
+    mcp_manager: MCPManager,
+    evolution_service: EvolutionService
+):
     """Aguarda o delay do debounce, garante trava de concorrência e gera resposta via LLM."""
     await asyncio.sleep(3) 
 
     # 1. Verifica Transbordo Humano pós-debounce
     if await redis_manager.is_human_active(instance, remote_jid):
-        print(f"Transbordo detectado para {remote_jid}. Bot cancelado.")
+        logger.info(f"Transbordo detectado para {remote_jid}. Bot cancelado.")
         await redis_manager.consume_buffer(instance, remote_jid)
         return
 
     # 2. Trava de Processamento (Distributed Lock)
     if not await redis_manager.acquire_processing_lock(instance, remote_jid, ex=120):
-        print(f"Chat {remote_jid} já em processamento. Ignorando tarefa redundante.")
+        logger.warning(f"Chat {remote_jid} já em processamento. Ignorando tarefa redundante.")
         return
 
     try:
@@ -73,14 +86,12 @@ async def process_debounced_messages(instance: str, remote_jid: str, redis_manag
                     redis_manager=redis_manager # Passando o gerenciador para a memória
                 )
 
-                # 5. Envia a resposta via Evolution API
-                from app.services.evolution_service import EvolutionService
-                evolution_service = EvolutionService()
+                # 5. Envia a resposta via Evolution API (Usando Singleton Reutilizável)
                 await evolution_service.send_text(instance, remote_jid, response_text)
 
-                print(f"Resposta enviada para {remote_jid} (Instance: {instance})")
+                logger.info(f"Resposta enviada com sucesso para {remote_jid} (Instance: {instance})")
             except Exception as e:
-                print(f"Erro no processamento/envio: {e}")
+                logger.error(f"Erro no processamento/envio para {remote_jid}: {e}", exc_info=True)
     finally:
         # Libera a trava para o próximo ciclo
         await redis_manager.release_processing_lock(instance, remote_jid)
@@ -92,7 +103,8 @@ async def health_check():
     try:
         if await app.state.redis_manager.ping():
             redis_status = "online"
-    except Exception: pass
+    except Exception as e:
+        logger.error(f"Erro no Health Check (Redis Offline): {e}")
 
     return {
         "status": "ok",
@@ -102,20 +114,16 @@ async def health_check():
     }
 
 @app.post("/webhook")
-async def evolution_webhook(payload: dict, background_tasks: BackgroundTasks):
-    event = payload.get("event")
-    instance = payload.get("instance")
-    data = payload.get("data", {})
-
-    key = data.get("key", {})
-    from_me = key.get("fromMe", data.get("fromMe", False))
-    remote_jid = key.get("remoteJid", data.get("remoteJid"))
+async def evolution_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks):
+    event = payload.event
+    instance = payload.instance
+    data = payload.data
+    
+    remote_jid = data.key.remoteJid
+    from_me = data.key.fromMe
 
     if event != "messages.upsert" or from_me:
         return {"status": "ignored"}
-
-    if not remote_jid or not instance:
-        return {"status": "error", "message": "Faltando instance ou remote_jid"}
 
     # --- [TASK-DEP-2.2] Validação de Tenant ID ---
     if instance not in TENANT_CONFIG:
@@ -124,15 +132,16 @@ async def evolution_webhook(payload: dict, background_tasks: BackgroundTasks):
 
     # --- [TASK-01] Blindagem de Privacidade: Ignora Grupos ---
     if "@g.us" in remote_jid:
-        print(f"Mensagem de grupo ignorada: {remote_jid}")
+        logger.info(f"Mensagem de grupo ignorada: {remote_jid}")
         return {"status": "ignored_group"}
 
     if await app.state.redis_manager.is_human_active(instance, remote_jid):
         return {"status": "human_active"}
 
-    message_obj = data.get("message", {})
-    message_text = message_obj.get("conversation") or \
-                   message_obj.get("extendedTextMessage", {}).get("text")
+    if not data.message:
+        return {"status": "no_message_content"}
+
+    message_text = data.message.text
     
     if not message_text:
         return {"status": "no_text_content"}
@@ -145,7 +154,9 @@ async def evolution_webhook(payload: dict, background_tasks: BackgroundTasks):
             instance, 
             remote_jid, 
             app.state.redis_manager,
-            app.state.mcp_manager
+            app.state.mcp_manager,
+            app.state.evolution_service
         )
 
     return {"status": "queued"}
+

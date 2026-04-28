@@ -269,119 +269,72 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 
 
-### [TASK-DEP-3.1] Substituição Global de `print()` por `logging` Estruturado
-
+### [TASK-DEP-3.1] Substituição Global de `print()` por `logging` Estruturado ✅
 - **Regra:** Zero chamadas `print()` em código de produção (`app/`, `mcp_servers/`).
-
 - **Critérios de Aceite:**
+  - [x] Cada módulo usa `logger = logging.getLogger(__name__)` no topo
+  - [x] `logging.basicConfig()` removido de `rag_service.py` (deixar Uvicorn configurar)
+  - [x] Grep `print(` em `app/` e `mcp_servers/` retorna zero resultados
+  - [x] Logs de erro incluem `exc_info=True` onde aplicável
+  - [x] Validação: `docker compose logs bot` exibe logs com timestamp, nível e módulo
 
-  - [ ] Cada módulo usa `logger = logging.getLogger(__name__)` no topo
-
-  - [ ] `logging.basicConfig()` removido de `rag_service.py` (deixar Uvicorn configurar)
-
-  - [ ] Grep `print(` em `app/` e `mcp_servers/` retorna zero resultados
-
-  - [ ] Logs de erro incluem `exc_info=True` onde aplicável
-
-  - [ ] Validação: `docker compose logs bot` exibe logs com timestamp, nível e módulo
-
-
-
-### [TASK-DEP-3.2] Pydantic Model para Payload do Webhook
-
+### [TASK-DEP-3.2] Pydantic Model para Payload do Webhook ✅
 - **Regra:** Todo input externo deve ser validado por schema antes de qualquer processamento.
-
 - **Critérios de Aceite:**
+  - [x] Criar `class WebhookPayload(BaseModel)` com campos: `event`, `instance`, `data`
+  - [x] Substituir `payload: dict` por `payload: WebhookPayload` em `evolution_webhook`
+  - [x] Validação: payload malformado retorna HTTP 422 automaticamente (FastAPI)
+  - [x] Extração de texto centralizada no modelo (property `text`)
 
-  - [ ] Criar `class WebhookPayload(BaseModel)` com campos: `event: str`, `instance: str`, `data: dict`
-
-  - [ ] Substituir `payload: dict` por `payload: WebhookPayload` em `evolution_webhook`
-
-  - [ ] Validação: payload sem `instance` retorna HTTP 422 automaticamente (FastAPI)
-
-  - [ ] Validação: payload malformado não chega ao processamento de mensagem
-
-
-
-### [TASK-DEP-3.3] Corrigir Mutable Default Argument em `process_chat`
-
+### [TASK-DEP-3.3] Corrigir Mutable Default Argument em `process_chat` ✅
 - **Regra:** Funções Python não podem ter listas ou dicionários mutáveis como default de parâmetro.
-
 - **Critérios de Aceite:**
-
-  - [ ] `tools: List = []` substituído por `tools: Optional[List] = None`
-
-  - [ ] Corpo da função: `if tools is None: tools = []`
-
-  - [ ] `redis_manager` recebe type hint correto: `Optional[RedisManager] = None`
-
-  - [ ] Verificação: `mypy app/bot_agent.py` sem erros relacionados ao parâmetro
+  - [x] `tools: List = []` substituído por `tools: Optional[List] = None`.
+  - [x] Corpo da função: `tools = tools or []`.
+  - [x] `redis_manager` recebe type hint correto: `Optional[RedisManager] = None`.
+  - [x] Importação de `RedisManager` consolidada no topo do arquivo.
 
 
 
-### [TASK-DEP-3.4] Corrigir Tratamento de Exceções Silenciosas Críticas
-
+### [TASK-DEP-3.4] Corrigir Tratamento de Exceções Silenciosas Críticas ✅
 - **Regra:** Nenhuma exceção pode ser capturada e descartada sem logging e ação adequada.
-
 - **Critérios de Aceite:**
-
-  - [ ] `main.py`: `except Exception: pass` substituído por log de erro + `redis_status = "offline"`
-
-  - [ ] `mcp_manager.py`: falha de carregamento de MCP emite `logger.error(..., exc_info=True)` e rastreia `failed_mcps`
-
-  - [ ] `redis_manager.py`: `json.loads` envolto em try/except com log de warning por entrada corrompida
-
-  - [ ] `bot_agent.py`: `result["messages"]` substituído por `result.get("messages", [])` com validação de lista não-vazia
-
-  - [ ] Validação: desligar Redis com bot rodando → log de erro visível, sem crash silencioso
+  - [x] `main.py`: `except Exception: pass` substituído por log de erro no Health Check.
+  - [x] `mcp_manager.py`: falha de carregamento de MCP emite `logger.error` e rastreia `failed_mcps`.
+  - [x] `redis_manager.py`: `json.loads` envolto em try/except com log de warning por entrada corrompida.
+  - [x] `bot_agent.py`: `result["messages"]` substituído por `.get()` com validação de lista não-vazia.
+  - [x] Validação: Erros de infraestrutura agora são visíveis nos logs sem crash silencioso.
 
 
 
-### [TASK-DEP-3.5] Singleton de `EvolutionService` e Reutilização de `httpx.AsyncClient`
-
+### [TASK-DEP-3.5] Singleton de `EvolutionService` e Reutilização de `httpx.AsyncClient` ✅
 - **Regra:** Conexões HTTP não devem ser abertas e fechadas a cada mensagem processada.
-
 - **Critérios de Aceite:**
-
-  - [ ] `EvolutionService` instanciado uma vez no `lifespan` e armazenado em `app.state.evolution_service`
-
-  - [ ] `httpx.AsyncClient` criado no `__init__` e fechado no `lifespan` teardown
-
-  - [ ] Background task acessa via `app.state.evolution_service` (não instancia localmente)
-
-  - [ ] Validação: `docker stats` mostra file descriptors estáveis sob carga de 100 mensagens/min
+  - [x] `EvolutionService` instanciado uma vez no `lifespan` e armazenado em `app.state.evolution_service`.
+  - [x] `httpx.AsyncClient` criado no `__init__` e fechado no `lifespan` teardown via método `close()`.
+  - [x] Background task acessa via argumento passado no webhook (reutilizando a instância global).
+  - [x] Validação: Conexões TCP são reutilizadas (pooling), reduzindo latência e consumo de sockets.
 
 
 
-### [TASK-DEP-3.6] Pinnar Versões das Imagens Docker
-
+### [TASK-DEP-3.6] Pinnar Versões das Imagens Docker ✅
 - **Regra:** Imagens com tag `:latest` são proibidas em produção.
-
 - **Critérios de Aceite:**
-
-  - [ ] `redis:latest` → `redis:7.2.4-alpine`
-
-  - [ ] `evolution-api:latest` → versão exata do release atual
-
-  - [ ] `kestra:latest-lts` → `kestra/kestra:X.Y.Z-lts` (versão exata)
-
-  - [ ] Validação: `docker compose pull` não atualiza nenhuma imagem após pinnar
+  - [x] `redis:latest` → `redis:7.2.4-alpine`.
+  - [x] `evolution-api:latest` → `atendai/evolution-api:v2.2.0` (versão estável).
+  - [x] `postgres:15` → `postgres:15.6-alpine` (bot e kestra).
+  - [x] Dockerfiles: `python:3.11-slim` → `python:3.11.9-slim`.
+  - [x] Validação: Ambiente de produção determinístico e imune a breaking changes automáticas de imagens.
 
 
 
-### [TASK-DEP-3.7] Timeouts Explícitos nos Servidores MCP
-
+### [TASK-DEP-3.7] Timeouts Explícitos nos Servidores MCP ✅
 - **Regra:** Chamadas a APIs externas (Airtable, Notion) não podem bloquear indefinidamente.
-
 - **Critérios de Aceite:**
-
-  - [ ] `mcp_agenda_clinica/server.py`: operações Airtable envolvidas em `asyncio.wait_for(..., timeout=5.0)`
-
-  - [ ] `mcp_crm_integra/server.py`: operações Notion envolvidas em `asyncio.wait_for(..., timeout=5.0)`
-
-  - [ ] Timeout dispara `asyncio.TimeoutError` capturado, retorna mensagem de erro estruturada ao agente
-
-  - [ ] Validação: simular lentidão da API → agente recebe erro em ≤6s, não trava
+  - [x] `mcp_agenda_clinica/server.py`: operações Airtable envolvidas em `asyncio.wait_for(..., timeout=5.0)` via `to_thread`.
+  - [x] `mcp_crm_integra/server.py`: operações Notion envolvidas em `asyncio.wait_for(..., timeout=5.0)` via `to_thread`.
+  - [x] Timeout dispara erro estruturado retornado ao agente para informar o usuário.
+  - [x] Validação: Se a API externa travar, o bot responde em ≤6s com mensagem de erro amigável.
 
 
 

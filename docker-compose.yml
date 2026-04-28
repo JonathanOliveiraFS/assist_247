@@ -4,7 +4,7 @@ services:
   # -------------------------------------------------------------
   postgres:
     container_name: postgres_integra
-    image: postgres:15
+    image: postgres:15.6-alpine
     command: ["postgres", "-c", "max_connections=1000"]
     restart: always
     environment:
@@ -20,7 +20,7 @@ services:
 
   redis:
     container_name: redis_integra
-    image: redis:latest
+    image: redis:7.2.4-alpine
     command: redis-server --port 6379 --appendonly yes --requirepass ${REDIS_PASSWORD}
     restart: always
     volumes:
@@ -37,7 +37,7 @@ services:
   # -------------------------------------------------------------
   evolution-api:
     container_name: evolution_api_integra
-    image: evoapicloud/evolution-api:latest 
+    image: atendai/evolution-api:v2.2.0
     restart: always
     ports:
       - "8080:8080"
@@ -112,7 +112,7 @@ services:
   # -------------------------------------------------------------
   postgres_kestra:
     container_name: postgres_kestra
-    image: postgres:15
+    image: postgres:15.6-alpine
     restart: always
     environment:
       - POSTGRES_USER=kestra_admin

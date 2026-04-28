@@ -1,5 +1,5 @@
 # Usamos uma imagem oficial e leve do Python
-FROM python:3.11-slim
+FROM python:3.11.9-slim
 
 # Impede que o Python grave arquivos .pyc e força o log no terminal
 ENV PYTHONDONTWRITEBYTECODE=1

@@ -51,15 +51,22 @@ async def handle_list_tools() -> list[types.Tool]:
         )
     ]
 
-def _check_disponibilidade(data_hora: str) -> bool:
-    """Função interna para verificar se o horário existe no Airtable."""
+async def _check_disponibilidade_async(data_hora: str) -> bool:
+    """Verifica se o horário existe no Airtable com suporte a timeout."""
     if not table:
         return False
-    # Filtra registros onde a coluna Data_Hora é igual ao valor fornecido
-    # Nota: Usamos aspas simples para cercar o valor da string na fórmula
+    
     formula = f"{{Data_Hora}} = '{data_hora}'"
-    records = table.all(formula=formula)
-    return len(records) > 0
+    
+    # Executa a chamada síncrona em uma thread separada com timeout
+    try:
+        records = await asyncio.wait_for(
+            asyncio.to_thread(table.all, formula=formula),
+            timeout=5.0
+        )
+        return len(records) > 0
+    except asyncio.TimeoutError:
+        raise RuntimeError("Tempo de resposta do Airtable excedido (Timeout 5s).")
 
 @server.call_tool()
 async def handle_call_tool(
@@ -72,37 +79,39 @@ async def handle_call_tool(
     if not arguments:
         return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
 
-    if name == "verificar_disponibilidade":
-        data_hora = arguments.get("data_hora")
-        if not data_hora:
-            return [types.TextContent(type="text", text="Erro: data_hora é obrigatório.")]
-        
-        ocupado = _check_disponibilidade(data_hora)
-        status = "OCUPADO" if ocupado else "DISPONÍVEL"
-        return [types.TextContent(type="text", text=f"O horário {data_hora} está {status}.")]
+    try:
+        if name == "verificar_disponibilidade":
+            data_hora = arguments.get("data_hora")
+            if not data_hora:
+                return [types.TextContent(type="text", text="Erro: data_hora é obrigatório.")]
+            
+            ocupado = await _check_disponibilidade_async(data_hora)
+            status = "OCUPADO" if ocupado else "DISPONÍVEL"
+            return [types.TextContent(type="text", text=f"O horário {data_hora} está {status}.")]
 
-    if name == "agendar_reuniao":
-        nome = arguments.get("nome")
-        telefone = arguments.get("telefone")
-        data_hora = arguments.get("data_hora")
+        if name == "agendar_reuniao":
+            nome = arguments.get("nome")
+            telefone = arguments.get("telefone")
+            data_hora = arguments.get("data_hora")
 
-        # [TASK-02] Verificação de Conflito Interna
-        if _check_disponibilidade(data_hora):
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"❌ Conflito de Horário: O horário {data_hora} já está reservado por outro cliente. Por favor, escolha outro horário."
-                )
-            ]
+            # Verificação de Conflito Interna
+            if await _check_disponibilidade_async(data_hora):
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"❌ Conflito de Horário: O horário {data_hora} já está reservado por outro cliente. Por favor, escolha outro horário."
+                    )
+                ]
 
-        try:
-            # Cria o registro no Airtable
-            # Nota: O nome do campo deve ser 'Nome' (N maiúsculo)
-            table.create({
-                "Nome": nome,
-                "Telefone": telefone,
-                "Data_Hora": data_hora
-            })
+            # Cria o registro no Airtable com timeout
+            await asyncio.wait_for(
+                asyncio.to_thread(table.create, {
+                    "Nome": nome,
+                    "Telefone": telefone,
+                    "Data_Hora": data_hora
+                }),
+                timeout=5.0
+            )
             
             return [
                 types.TextContent(
@@ -110,13 +119,21 @@ async def handle_call_tool(
                     text=f"✅ Agendamento realizado com sucesso para {nome} em {data_hora}."
                 )
             ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"❌ Erro ao agendar no Airtable: {str(e)}"
-                )
-            ]
+
+    except asyncio.TimeoutError:
+        return [
+            types.TextContent(
+                type="text",
+                text="❌ Erro de Conexão: O serviço de agenda (Airtable) demorou muito para responder. Por favor, tente novamente em instantes."
+            )
+        ]
+    except Exception as e:
+        return [
+            types.TextContent(
+                type="text",
+                text=f"❌ Erro operacional no MCP Airtable: {str(e)}"
+            )
+        ]
 
     raise ValueError(f"Ferramenta desconhecida: {name}")
 

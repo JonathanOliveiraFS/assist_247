@@ -1,8 +1,11 @@
 import json
 import asyncio
+import logging
 from typing import Optional, List
 import redis.asyncio as redis
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class RedisManager:
     def __init__(self):
@@ -54,7 +57,15 @@ class RedisManager:
         """Recupera o histórico de mensagens formatado para o Agente."""
         history_key = f"history:{tenant_id}:{remote_jid}"
         raw_history = await self.redis.lrange(history_key, 0, -1)
-        return [json.loads(msg) for msg in raw_history]
+        
+        history = []
+        for msg in raw_history:
+            try:
+                history.append(json.loads(msg))
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"Entrada de histórico corrompida ignorada para {remote_jid}: {msg}")
+                continue
+        return history
 
     # --- Human-in-the-Loop Logic (Multi-tenancy Secured) ---
     async def set_human_status(self, tenant_id: str, remote_jid: str, is_human: bool):
