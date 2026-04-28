@@ -459,42 +459,34 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 
 
+---
+
 ### FASE 5 — Gate de Lançamento (checklist final pré-go-live)
 
+... (restante do conteúdo da Fase 5) ...
 
+---
 
-### [TASK-DEP-5.1] Smoke Test End-to-End em Staging
+## 6. Sprint: Harness & Orquestração (LangGraph)
 
-- **Regra:** O sistema completo deve funcionar sem intervenção manual em ambiente limpo.
+### [TASK-H1] Migração para LangGraph (Estrutura Base) ✅
+- **Regra:** Substituir a execução linear do `AgentExecutor` por um `StateGraph`.
+- **Critério de Aceite:** O fluxo de conversa deve ser mapeado em nós (Start -> Router -> Action -> End).
 
-- **Critérios de Aceite:**
+### [TASK-H2] Implementação de Checkpointing (Externalização) ✅
+- **Regra:** O estado da conversa (grafo) deve ser persistido externamente.
+- **Critério de Aceite:** Configurar o `SqliteSaver` (ou Postgres) para permitir o resumo da conversa a partir do último checkpoint em caso de falha.
 
-  - [ ] `docker compose down -v && docker compose up -d` em máquina limpa sem erros
+### [TASK-H3] Nó Router Determinístico ✅
+- **Regra:** O primeiro nó deve classificar a intenção entre: Suporte (RAG), Ação (MCP) ou Chat Geral.
+- **Critério de Aceite:** Redução de chamadas desnecessárias ao RAG quando o usuário apenas diz "Obrigado" ou solicita uma ação direta via MCP.
 
-  - [ ] `docker compose ps` mostra todos os serviços `(healthy)`
+- [x] **TASK-H4: HITL Nativo no Grafo (Human-in-the-Loop)**
+- **Regra:** O transbordo humano deve ser um estado do grafo ("interrupt").
+- **Critério de Aceite:** O sistema deve suportar `interrupt_before` em ações críticas (ex: agendamentos de alto valor) para aprovação manual se configurado.
 
-  - [ ] Enviar mensagem de teste via Evolution API → bot responde em ≤10s
-
-  - [ ] Fluxo completo de agendamento executado sem erro (verificar disponibilidade → coletar dados → confirmar)
-
-  - [ ] Transbordo humano: bot pausa, admin notificado, bot retoma após expiração
-
-  - [ ] Mensagem de grupo ignorada corretamente
-
-
-
-### [TASK-DEP-5.2] Criar `docker-compose.prod.yml` com Overrides de Produção
-
-- **Regra:** Ambiente de produção não deve ter bind-mounts de código-fonte.
-
-- **Critérios de Aceite:**
-
-  - [ ] `docker-compose.prod.yml` remove `volumes: - ./app:/app/app` e `- ./mcp_servers:/app/mcp_servers`
-
-  - [ ] Imagens buildadas com `docker compose -f docker-compose.yml -f docker-compose.prod.yml build`
-
-  - [ ] Variáveis de ambiente lidas de `.env` externo (não commitado)
-
-  - [ ] Validação: `docker compose -f docker-compose.prod.yml up` funciona sem código no host
+### [TASK-H5] Otimização de Context Window ✅
+- **Regra:** O Harness deve filtrar mensagens irrelevantes do histórico antes de enviar ao LLM.
+- **Critério de Aceite:** Implementação de lógica de "trimming" (via `trim_messages`) e "summary" (nó de sumarização) para manter a latência baixa e memória de longo prazo.
 
 

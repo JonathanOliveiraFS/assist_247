@@ -3,10 +3,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import FastAPI, Request, BackgroundTasks
-from app.config import settings
-from app.redis_manager import RedisManager
-from app.mcp_manager import MCPManager
-from app.tenant_config import TENANT_CONFIG
+from app.core.config import settings
+from app.core.redis_manager import RedisManager
+from app.core.mcp_manager import MCPManager
+from app.core.tenant_config import TENANT_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def process_debounced_messages(instance: str, remote_jid: str, redis_manag
                 mcp_tools = mcp_manager.get_tools()
 
                 # 4. Gera a resposta usando o agente (Injetando Memória e Ferramentas)
-                from app.bot_agent import process_chat
+                from app.services.bot_agent import process_chat
                 response_text = await process_chat(
                     messages, 
                     remote_jid=remote_jid, 
@@ -74,7 +74,7 @@ async def process_debounced_messages(instance: str, remote_jid: str, redis_manag
                 )
 
                 # 5. Envia a resposta via Evolution API
-                from app.evolution_service import EvolutionService
+                from app.services.evolution_service import EvolutionService
                 evolution_service = EvolutionService()
                 await evolution_service.send_text(instance, remote_jid, response_text)
 

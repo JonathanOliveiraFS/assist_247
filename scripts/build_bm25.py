@@ -7,7 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.retrievers import BM25Retriever
-from app.config import settings
+from app.core.config import settings
 
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)

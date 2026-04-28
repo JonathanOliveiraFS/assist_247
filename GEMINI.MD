@@ -91,27 +91,22 @@ graph TD
     F --> I["🔔 Webhook Notifica API<br/>para recarregar memória"]
     H --> I
 
-📁 Estrutura de Arquivos Expandida
+📁 Estrutura de Arquivos Modular (Clean Architecture)
 integra_ai_bot/
 ├── app/
-│   ├── main.py                 # FastAPI Webhook e rotas administrativas
-│   ├── agent.py                # Configuração do Agente LangChain + Cliente MCP
-│   ├── rag_hybrid.py           # Lógica do EnsembleRetriever (Chroma + BM25)
-│   ├── config.py               # Variáveis de ambiente (Pydantic Settings)
-│   ├── evolution_api.py        # Wrapper HTTP para EvolutionAPI
-│   └── redis_manager.py        # Buffer, Debounce e Human-in-the-Loop state
-├── kestra_flows/               # Pipelines de orquestração de dados
-│   ├── atualizar_rag_cliente.yaml
-│   └── relatorio_atendimentos.yaml
-├── mcp_servers/                # Ferramentas isoladas via Model Context Protocol
-│   ├── mcp_agenda_clinica/     # Ex: Servidor MCP para sistema de agendamento
-│   └── mcp_crm_integra/        # Ex: Servidor MCP para CRM interno
-├── rag_data/                   # Volumes montados para dados vetorizados
-│   ├── chromadb/               # Banco vetorial
-│   └── bm25_indexes/           # Arquivos .pkl com índices léxicos por cliente
-├── docker-compose.yml          # Orquestração de todos os serviços
-├── Dockerfile                  # Build da API principal
-└── requirements.txt            # Dependências Python da API
+│   ├── core/                   # Configurações, Redis, MCP Manager, Tenants
+│   ├── services/               # Lógica do Agente, RAG, Evolution Service
+│   ├── models/                 # Modelos de dados e Schemas Pydantic
+│   └── main.py                 # Ponto de entrada FastAPI e Lifespan
+├── kestra/                     # Fluxos de orquestração (antigo kestra_flows)
+├── mcp_servers/                # Servidores MCP isolados (Agenda, CRM, etc.)
+├── rag_data/                   # Dados persistentes (ChromaDB, BM25 Index)
+├── tests/                      # Testes automatizados e setups de teste
+├── scripts/                    # Utilitários de build, setup e manutenção
+├── docs/                       # Documentação, Pesquisas e Referências de Skills
+├── docker-compose.yml          # Orquestração de containers
+├── Dockerfile                  # Build da imagem da API
+└── pyproject.toml              # Gerenciamento de dependências (UV)
 
 🔑 Componentes Principais Detalhados
 1. Human-in-the-Loop (Transbordo)
