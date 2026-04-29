@@ -21,6 +21,9 @@ class WebhookMessage(BaseModel):
 
 class WebhookData(BaseModel):
     key: WebhookKey
+    pushName: Optional[str] = None
+    remoteJidAlt: Optional[str] = None
+    senderPn: Optional[str] = None
     message: Optional[WebhookMessage] = None
     messageType: Optional[str] = None
     instanceId: Optional[str] = None

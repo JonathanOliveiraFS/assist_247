@@ -28,3 +28,8 @@ tasks:
           echo "Ambiente virtual encontrado. Startup instantâneo!"
         fi
       - /app/scripts/venv_kestra/bin/python /app/scripts/build_bm25.py {{ trigger.body.tenant_id ?? 'integra_ai' }}
+
+  - id: notify_bot_complete
+    type: io.kestra.plugin.core.http.Request
+    uri: "http://integra_ai_bot:8000/internal/rag/indexing/complete/{{ trigger.body.tenant_id ?? 'integra_ai' }}?key={{ trigger.key }}"
+    method: POST

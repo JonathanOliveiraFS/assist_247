@@ -6,6 +6,11 @@ import httpx
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 import mcp.types as types
+from datetime import datetime
+
+# Importação relativa para usar o RedisManager do core (ajustando sys.path no startup se necessário)
+# Por simplicidade no container MCP, usaremos o incremento direto via redis client
+# ou recriaremos a lógica de métrica aqui.
 
 # Configuração do Servidor MCP Admin
 server = Server("mcp-admin-bia")
@@ -19,6 +24,13 @@ ADMIN_INSTANCE = os.environ.get("ADMIN_INSTANCE")
 
 # Instância do Redis
 r = redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
+
+async def increment_tenant_metric(tenant_id: str, metric_name: str):
+    if not r: return
+    day_str = datetime.now().strftime("%Y-%m-%d")
+    metric_key = f"metrics:{tenant_id}:{day_str}:{metric_name}"
+    await r.incr(metric_key)
+    await r.expire(metric_key, 86400 * 30)
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -58,9 +70,12 @@ async def handle_call_tool(
         motivo = arguments.get("motivo")
 
         try:
-            # 1. [FIX] Salva no Redis com Multi-tenancy (24h)
+            # 1. Salva no Redis com Multi-tenancy (24h)
             status_key = f"status:human:{tenant_id}:{remote_jid}"
             await r.set(status_key, "true", ex=86400)
+
+            # --- [TASK-7.3] Incrementa métrica de transbordo ---
+            await increment_tenant_metric(tenant_id, "human_transfers")
 
             # 2. Notifica o administrador via Evolution API
             notificacao = (

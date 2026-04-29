@@ -1,0 +1,79 @@
+id: health_monitor
+namespace: io.integra.ai
+
+description: "Monitoramento contínuo de saúde dos serviços críticos (OpenAI, Redis, Evolution)"
+
+triggers:
+  - id: every_5_minutes
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "*/5 * * * *"
+
+tasks:
+  - id: check_openai
+    type: io.kestra.plugin.core.http.Request
+    uri: "https://api.openai.com/v1/models"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ secret('OPENAI_API_KEY') }}"
+    allowFailed: true
+
+  - id: check_evolution
+    type: io.kestra.plugin.core.http.Request
+    uri: "http://evolution-api:8080/"
+    method: GET
+    allowFailed: true
+
+  - id: check_redis
+    type: io.kestra.plugin.scripts.python.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    beforeCommands:
+      - pip install -q redis
+    commands:
+      - |
+        import redis
+        import os
+        import sys
+        try:
+            r = redis.from_url(os.environ['REDIS_URL'])
+            if r.ping():
+                print("Redis is online")
+            else:
+                sys.exit(1)
+        except Exception as e:
+            print(f"Redis error: {e}")
+            sys.exit(1)
+    env:
+      REDIS_URL: "{{ env.REDIS_URL }}"
+    allowFailed: true
+
+  - id: evaluate_health
+    type: io.kestra.plugin.core.execution.Fail
+    condition: "{{ (outputs.check_openai.code != 200) or (outputs.check_evolution.code != 200) or (outputs.check_redis.exitCode != 0) }}"
+    allowFailed: true
+
+  - id: send_alert
+    type: io.kestra.plugin.core.http.Request
+    uri: "{{ env.EVOLUTION_API_URL }}/message/sendText/{{ env.ADMIN_INSTANCE }}"
+    method: POST
+    headers:
+      apikey: "{{ env.EVOLUTION_API_KEY }}"
+    body:
+      number: "{{ env.ADMIN_NUMBER }}"
+      text: |
+        🚨 *ALERTA DE SAÚDE - INTEGRA.AI* 🚨
+        
+        Alguns serviços críticos apresentam instabilidade:
+        
+        🧠 *OpenAI:* {{ outputs.check_openai.code == 200 ? '✅ OK' : '❌ FALHA (HTTP ' ~ outputs.check_openai.code ~ ')' }}
+        📱 *Evolution:* {{ outputs.check_evolution.code == 200 ? '✅ OK' : '❌ FALHA' }}
+        💾 *Redis:* {{ outputs.check_redis.exitCode == 0 ? '✅ OK' : '❌ FALHA' }}
+        
+        Verifique os logs no Kestra imediatamente.
+    allowFailed: true
+    runIf: "{{ (outputs.check_openai.code != 200) or (outputs.check_evolution.code != 200) or (outputs.check_redis.exitCode != 0) }}"
+
+errors:
+  - id: alert_on_failure
+    type: io.kestra.plugin.core.log.Log
+    message: "O monitoramento de saúde falhou ao executar suas tarefas de checagem."

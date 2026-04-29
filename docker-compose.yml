@@ -62,7 +62,7 @@ services:
   # -------------------------------------------------------------
   evolution-api:
     container_name: evolution_api_integra
-    image: atendai/evolution-api:v2.2.0
+    image: evoapicloud/evolution-api:v2.3.2
     restart: always
     ports:
       - "8080:8080"

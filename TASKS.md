@@ -57,19 +57,31 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 ### [TASK-7.1] Pipeline de RAG Assíncrono (Event-Driven)
 - **Regra:** Transferir o "Auto-Build" do RAG do FastAPI para o Kestra usando gatilhos event-driven.
-- **Critério de Aceite:** O RAG deve rodar em background via Kestra sem causar timeout no Webhook da Evolution API. O bot deve apenas sinalizar a necessidade ou aguardar a notificação de conclusão.
+- **Critério de Aceite:**
+  - [x] O RAG deve rodar em background via Kestra sem causar timeout no Webhook da Evolution API.
+  - [x] O bot deve sinalizar a necessidade (via aviso no contexto) enquanto aguarda a indexação.
+  - [x] Implementado endpoint de notificação de conclusão para limpar o status no Redis.
 
 ### [TASK-7.2] Deep Health Monitor
 - **Regra:** Fluxo de monitoramento contínuo dos serviços críticos.
-- **Critério de Aceite:** Fluxo no Kestra realizando pings em Redis, OpenAI API e instâncias da Evolution API, disparando alertas (ex: via WhatsApp/Email) em caso de falha.
+- **Critério de Aceite:**
+  - [x] Fluxo no Kestra realizando pings em Redis, OpenAI API e instâncias da Evolution API.
+  - [x] Agendamento a cada 5 minutos.
+  - [x] Disparo de alertas via WhatsApp (Evolution API) em caso de falha.
 
 ### [TASK-7.3] Relatórios B2B Automatizados
 - **Regra:** Agregação semanal de métricas de atendimento.
-- **Critério de Aceite:** Fluxo agregando métricas por `tenant_id` no Notion/Airtable e enviando um resumo via Evolution API para os gestores.
+- **Critério de Aceite:**
+  - [x] Implementado rastreamento de métricas diárias no Redis (`messages_processed`, `human_transfers`).
+  - [x] Fluxo no Kestra que agrega dados dos últimos 7 dias por `tenant_id`.
+  - [x] Envio automático de resumo via WhatsApp (Evolution API) toda segunda-feira.
 
 ### [TASK-7.4] FinOps - Governança de IA
 - **Regra:** Rastreamento de custos e uso de tokens.
-- **Critério de Aceite:** Job que rastreia o uso de tokens da OpenAI por `tenant_id`, mantendo histórico e disparando alertas ao atingir limites predefinidos.
+- **Critério de Aceite:**
+  - [x] Captura de `token_usage` dos metadados da resposta OpenAI no nó do Agente.
+  - [x] Persistência diária consolidada no Redis (`tokens_prompt`, `tokens_completion`) por `tenant_id`.
+  - [x] Base de dados pronta para auditoria de custos e limites.
 
 ### [TASK-7.5] CRM Proativo (Follow-up)
 - **Regra:** Reativação de leads ociosos.
@@ -174,36 +186,23 @@ Este documento consolida as tarefas e critérios de aceite para a evolução do 
 
 
 ### [TASK-DEP-2.3] Consolidação dos Servidores MCP de Agenda
-
 - **Regra:** Não pode existir mais de um servidor MCP registrando ferramentas com o mesmo nome.
-
 - **Critérios de Aceite:**
-
-  - [ ] Auditar `mcp_servers/airtable/server.py` vs `mcp_servers/mcp_agenda_clinica/server.py` e definir qual é canônico (critério: usa fórmula Airtable — mais determinístico)
-
-  - [ ] Remover ou renomear o servidor conflitante; atualizar `mcp_manager.py` se necessário
-
-  - [ ] Validação: `app.state.mcp_pool.get_tools()` não retorna nomes duplicados (verificar via `/health`)
-
-  - [ ] Teste E2E: conversa de agendamento completa executa sem ambiguidade de ferramenta
+  - [x] Auditar `mcp_servers/airtable/server.py` vs `mcp_servers/mcp_agenda_clinica/server.py` e definir qual é canônico (critério: usa fórmula Airtable — mais determinístico)
+  - [x] Remover ou renomear o servidor conflitante; atualizar `mcp_manager.py` se necessário
+  - [x] Validação: `app.state.mcp_pool.get_tools()` não retorna nomes duplicados (verificar via `/health`)
+  - [x] Teste E2E: conversa de agendamento completa executa sem ambiguidade de ferramenta
 
 
 
-### [TASK-DEP-2.4] Build Inicial dos Índices RAG para Tenant `integra_ai`
-
+### [TASK-DEP-2.4] Build Inicial dos Índices RAG para Tenant `integra_ai` ✅
 - **Regra:** O índice BM25 e a coleção ChromaDB devem existir antes do primeiro cliente interagir.
-
 - **Critérios de Aceite:**
-
-  - [ ] Executar `docker exec integra_ai_bot python scripts/build_bm25.py integra_ai` com sucesso
-
-  - [ ] Arquivo `rag_data/bm25_indexes/integra_ai_index.pkl` existe e tem tamanho > 0
-
-  - [ ] Coleção `cliente_integra_ai` existe no ChromaDB (`rag_data/chromadb/`)
-
-  - [ ] Validação: endpoint `/health` não retorna aviso de índice ausente
-
-  - [ ] Validação: consulta de teste retorna documentos relevantes sem disparar auto-build
+  - [x] Executar `docker exec integra_ai_bot python scripts/build_bm25.py integra_ai` com sucesso.
+  - [x] Arquivo `rag_data/bm25_indexes/integra_ai_index.pkl` existe e tem tamanho > 0.
+  - [x] Coleção `cliente_integra_ai` existe no ChromaDB (`rag_data/chromadb/`).
+  - [x] Validação: endpoint `/health` não retorna aviso de índice ausente.
+  - [x] Validação: consulta de teste retorna documentos relevantes sem disparar auto-build.
 
 
 

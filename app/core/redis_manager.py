@@ -76,3 +76,12 @@ class RedisManager:
         status_key = f"status:human:{tenant_id}:{remote_jid}"
         status = await self.redis.get(status_key)
         return status == "true"
+
+    # --- Metrics Tracking (TASK-7.3) ---
+    async def increment_metric(self, tenant_id: str, metric_name: str, amount: int = 1):
+        """Incrementa um contador diário para uma métrica específica do tenant."""
+        from datetime import datetime
+        day_str = datetime.now().strftime("%Y-%m-%d")
+        metric_key = f"metrics:{tenant_id}:{day_str}:{metric_name}"
+        await self.redis.incrby(metric_key, amount)
+        await self.redis.expire(metric_key, 86400 * 30) # Mantém métricas por 30 dias

@@ -48,13 +48,14 @@ async def handle_call_tool(
         if not arguments:
             return [types.TextContent(type="text", text="Erro: Argumentos ausentes.")]
 
-        nome = arguments.get("nome")
-        telefone = arguments.get("telefone")
-        resumo = arguments.get("resumo")
+        nome = arguments.get("nome") or "Lead Sem Nome"
+        telefone = arguments.get("telefone") or "Sem Telefone"
+        resumo = arguments.get("resumo") or "Interesse em automações (via WhatsApp)"
         data_atual = datetime.now().isoformat()
 
         try:
             # Lógica de Inserção no Notion com Timeout de 5s
+            # Usamos threads para a chamada síncrona do notion-client não bloquear o loop
             await asyncio.wait_for(
                 asyncio.to_thread(
                     notion.pages.create,
@@ -74,21 +75,29 @@ async def handle_call_tool(
             return [
                 types.TextContent(
                     type="text",
-                    text=f"✅ Lead '{nome}' registrado com sucesso no Notion CRM."
+                    text=f"✅ Lead '{nome}' (Tel: {telefone}) registrado com sucesso no Notion CRM."
                 )
             ]
         except asyncio.TimeoutError:
+            print("TIMEOUT: Notion demorou muito para responder.", file=os.sys.stderr)
             return [
                 types.TextContent(
                     type="text",
-                    text="❌ Erro de Conexão: O Notion demorou muito para responder. O lead pode não ter sido salvo. Por favor, tente novamente."
+                    text="❌ Erro de Conexão: O Notion demorou muito para responder. Por favor, verifique se o banco de dados está acessível e tente novamente."
                 )
             ]
         except Exception as e:
+            error_msg = str(e)
+            print(f"ERRO NOTION: {error_msg}", file=os.sys.stderr)
+            if "API token is invalid" in error_msg:
+                return [types.TextContent(type="text", text="❌ Erro de Autenticação: O token do Notion configurado no servidor é inválido ou expirou. Por favor, contate o suporte técnico.")]
+            if "Could not find database" in error_msg:
+                return [types.TextContent(type="text", text="❌ Erro de Configuração: O banco de dados do Notion não foi encontrado. Verifique o ID do banco de dados.")]
+            
             return [
                 types.TextContent(
                     type="text",
-                    text=f"❌ Erro operacional no MCP Notion: {str(e)}"
+                    text=f"❌ Falha ao registrar lead: {error_msg}"
                 )
             ]
 

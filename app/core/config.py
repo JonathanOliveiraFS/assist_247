@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     redis_url: str = Field(..., env='REDIS_URL')
     kestra_api_url: str = Field(default="http://kestra:8080", env='KESTRA_API_URL')
-    kestra_webhook_key: str = Field(default="fallback_key_aqui", env='KESTRA_WEBHOOK_KEY')
+    kestra_webhook_key: str = Field(default="integra_secret_key_2024", env='KESTRA_WEBHOOK_KEY')
 
     environment: str = Field(default="development", env='ENVIRONMENT')
 

@@ -1,0 +1,76 @@
+id: weekly_b2b_report
+namespace: io.integra.ai
+
+description: "Geração de relatórios semanais de métricas por Tenant"
+
+triggers:
+  - id: weekly_schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 * * 1" # Toda segunda-feira às 09:00
+
+tasks:
+  - id: process_tenants
+    type: io.kestra.plugin.core.flow.EachSequential
+    value: "['integra_ai', 'test_tenant']" # Lista de tenants (Idealmente viria de um config central)
+    tasks:
+      - id: aggregate_metrics
+        type: io.kestra.plugin.scripts.python.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        beforeCommands:
+          - pip install -q redis
+        env:
+          REDIS_URL: "{{ env.REDIS_URL }}"
+          TENANT_ID: "{{ taskrun.value }}"
+        commands:
+          - |
+            import redis
+            import os
+            from datetime import datetime, timedelta
+            import json
+
+            r = redis.from_url(os.environ['REDIS_URL'], decode_responses=True)
+            tenant_id = os.environ['TENANT_ID']
+            
+            total_msgs = 0
+            total_transfers = 0
+            
+            # Agrega dados dos últimos 7 dias
+            for i in range(1, 8):
+                date_str = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                
+                msg_val = r.get(f"metrics:{tenant_id}:{date_str}:messages_processed")
+                trans_val = r.get(f"metrics:{tenant_id}:{date_str}:human_transfers")
+                
+                total_msgs += int(msg_val) if msg_val else 0
+                total_transfers += int(trans_val) if trans_val else 0
+            
+            # Exporta para o Kestra usar na próxima task
+            with open('metrics.json', 'w') as f:
+                json.dump({
+                    "tenant_id": tenant_id,
+                    "total_messages": total_msgs,
+                    "total_transfers": total_transfers,
+                    "period": "Últimos 7 dias"
+                }, f)
+        outputFiles:
+          - metrics.json
+
+      - id: send_report_whatsapp
+        type: io.kestra.plugin.core.http.Request
+        uri: "{{ env.EVOLUTION_API_URL }}/message/sendText/{{ env.ADMIN_INSTANCE }}"
+        method: POST
+        headers:
+          apikey: "{{ env.EVOLUTION_API_KEY }}"
+        body:
+          number: "{{ env.ADMIN_NUMBER }}"
+          text: |
+            📊 *RELATÓRIO SEMANAL B2B* 📊
+            🏢 *Tenant:* {{ json(read(outputs.aggregate_metrics.outputFiles['metrics.json'])).tenant_id }}
+            🗓️ *Período:* {{ json(read(outputs.aggregate_metrics.outputFiles['metrics.json'])).period }}
+            
+            💬 *Mensagens Processadas:* {{ json(read(outputs.aggregate_metrics.outputFiles['metrics.json'])).total_messages }}
+            👤 *Transbordos Humanos:* {{ json(read(outputs.aggregate_metrics.outputFiles['metrics.json'])).total_transfers }}
+            
+            _Relatório gerado automaticamente pela Integra.ai_
+        allowFailed: true
