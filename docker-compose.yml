@@ -8,29 +8,54 @@ services:
     command: ["postgres", "-c", "max_connections=1000"]
     restart: always
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PWD}
+      - POSTGRES_USER=postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   redis:
     container_name: redis_integra
-    image: redis:7.2.4-alpine
-    command: redis-server --port 6379 --appendonly yes --requirepass ${REDIS_PASSWORD}
+    image: redis:7.4-alpine
+    command: redis-server --port 6379 --appendonly yes --requirepass ${REDIS_PWD}
     restart: always
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          memory: 128M
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PWD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   # -------------------------------------------------------------
   # 2. MOTOR DE TEMPO REAL (Comunicação WhatsApp)
@@ -48,12 +73,18 @@ services:
     depends_on:
       - postgres
       - redis
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   # -------------------------------------------------------------
   # 3. MOTOR PRINCIPAL (Bot FastAPI + LangChain)
@@ -72,7 +103,15 @@ services:
       redis:
         condition: service_healthy
       evolution-api:
-        condition: service_healthy
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -83,6 +122,11 @@ services:
       - ./rag_data:/app/rag_data
       - ./app:/app/app
       - ./mcp_servers:/app/mcp_servers
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   # -------------------------------------------------------------
   # 4. SERVIDORES MCP (Isolamento de Ferramentas)
@@ -96,6 +140,16 @@ services:
     env_file:
       - .env
     command: python server.py
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   mcp-crm:
     container_name: mcp_crm_integra
@@ -106,6 +160,16 @@ services:
     env_file:
       - .env
     command: python server.py
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # -------------------------------------------------------------
   # 5. INFRA E ORQUESTRADOR KESTRA (v1.3 LTS - 2026)
@@ -120,9 +184,19 @@ services:
       - POSTGRES_DB=kestra_db
     volumes:
       - postgres_kestra_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   kestra:
-    image: kestra/kestra:v1.3.8-full
+    image: kestra/kestra:v1.3.8
     container_name: kestra_integra
     user: "root"
     command: server standalone
@@ -161,6 +235,13 @@ services:
               postgres:
                 enabled: true
       JAVA_OPTS: "-Xmx1g"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G
+        reservations:
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -169,6 +250,11 @@ services:
       start_period: 60s
     depends_on:
       - postgres_kestra
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
 # -------------------------------------------------------------
 # DEFINIÇÃO DE VOLUMES GLOBAIS (Mapping fix)
